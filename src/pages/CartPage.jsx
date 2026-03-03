@@ -3,27 +3,19 @@ import { Link } from 'react-router-dom';
 import { Minus, Plus, Trash2, Tag, ArrowRight, ShoppingBag } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import Button from '../components/Button';
-import { cartItems as initialItems } from '../data/mockData';
+import { useCart } from '../context/CartContext';
 
 export default function CartPage() {
-  const [items, setItems] = useState(initialItems);
+  const { cartItems: items, updateQuantity: contextUpdateQty, removeFromCart, subtotal, loading } = useCart();
   const [promoCode, setPromoCode] = useState('');
 
   const updateQuantity = (id, delta) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity + delta) }
-          : item
-      )
-    );
+    contextUpdateQty(id, (current) => Math.max(1, current + delta));
   };
 
   const removeItem = (id) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    removeFromCart(id);
   };
-
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shipping = subtotal > 500 ? 0 : 49.99;
   const tax = subtotal * 0.085;
   const total = subtotal + shipping + tax;
@@ -92,7 +84,7 @@ export default function CartPage() {
                 <div className="flex items-center justify-between mt-4">
                   <div className="flex items-center border border-border rounded-lg">
                     <button
-                      onClick={() => updateQuantity(item.id, -1)}
+                      onClick={() => updateQty(item.id, -1)}
                       className="p-2 hover:bg-gray-50 transition-colors"
                     >
                       <Minus size={14} />
@@ -101,7 +93,7 @@ export default function CartPage() {
                       {item.quantity}
                     </span>
                     <button
-                      onClick={() => updateQuantity(item.id, 1)}
+                      onClick={() => updateQty(item.id, 1)}
                       className="p-2 hover:bg-gray-50 transition-colors"
                     >
                       <Plus size={14} />

@@ -1,33 +1,77 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+} from 'firebase/auth';
+import { auth } from '../firebase';
+import { getUserProfile, createUserProfile } from '../services/userService';
 
 const AuthContext = createContext(null);
 
-const mockUser = {
-  name: 'John Doe',
-  email: 'john.doe@example.com',
-  phone: '+1 (555) 123-4567',
-  avatar: 'https://i.pravatar.cc/100?img=33',
-  addresses: [
-    { id: 1, label: 'Home', street: '123 Oak Street, Apt 4B', city: 'San Francisco', state: 'CA', zip: '94102', isDefault: true },
-    { id: 2, label: 'Office', street: '456 Market Street, Floor 12', city: 'San Francisco', state: 'CA', zip: '94105', isDefault: false },
-  ],
-};
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const signIn = (email, password) => {
-    // Mock sign-in — accept any credentials
-    setUser(mockUser);
-    return true;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Try to fetch user profile from Firestore
+        let profile = await getUserProfile(firebaseUser.uid);
+        if (!profile) {
+          // Create a basic profile if none exists
+          await createUserProfile(firebaseUser.uid, {
+            name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+            email: firebaseUser.email,
+            phone: '',
+            avatar: firebaseUser.photoURL || `https://i.pravatar.cc/100?u=${firebaseUser.uid}`,
+            addresses: [],
+          });
+          profile = await getUserProfile(firebaseUser.uid);
+        }
+        setUser({ uid: firebaseUser.uid, ...profile });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const signIn = async (email, password) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   };
 
-  const signOut = () => {
+  const signUp = async (email, password, name) => {
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await createUserProfile(cred.user.uid, {
+        name: name || email.split('@')[0],
+        email,
+        phone: '',
+        avatar: `https://i.pravatar.cc/100?u=${cred.user.uid}`,
+        addresses: [],
+      });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const signOut = async () => {
+    await firebaseSignOut(auth);
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

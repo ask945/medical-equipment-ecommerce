@@ -1,14 +1,16 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import FilterSidebar from '../components/FilterSidebar';
 import ProductCard from '../components/ProductCard';
-import { products } from '../data/mockData';
+import { getProducts } from '../services/productService';
 
 const PRODUCTS_PER_PAGE = 6;
 
 export default function ProductListingPage() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('featured');
   const [showFilters, setShowFilters] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -21,6 +23,20 @@ export default function ProductListingPage() {
     brands: [],
     minRating: 0,
   });
+
+  useEffect(() => {
+    async function fetchProducts() {
+      try {
+        const data = await getProducts();
+        setProducts(data);
+      } catch (err) {
+        console.error('Error fetching products:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProducts();
+  }, []);
 
   const filteredProducts = useMemo(() => {
     let result = products;
@@ -49,7 +65,7 @@ export default function ProductListingPage() {
     }
 
     return result;
-  }, [categoryFilter, sidebarFilters]);
+  }, [products, categoryFilter, sidebarFilters]);
 
   // Pagination computed values
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
@@ -68,6 +84,14 @@ export default function ProductListingPage() {
   const breadcrumbItems = categoryFilter
     ? [{ label: 'Products', href: '/products' }, { label: categoryFilter }]
     : [{ label: 'Products' }];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="container-main animate-fade-in">

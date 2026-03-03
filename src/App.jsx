@@ -1,3 +1,4 @@
+import { useAuth } from './context/AuthContext';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -9,8 +10,6 @@ import ProductListingPage from './pages/ProductListingPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
-import InvoicePage from './pages/InvoicePage';
-import RecurringSupplyPage from './pages/RecurringSupplyPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import SignInPage from './pages/SignInPage';
@@ -23,6 +22,12 @@ const dashboardRoutes = ['/invoices'];
 
 function AppLayout() {
   const location = useLocation();
+  const { loading } = useAuth();
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div></div>;
+  }
+
   const isDashboard = dashboardRoutes.includes(location.pathname);
 
   return (
@@ -36,8 +41,6 @@ function AppLayout() {
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/invoices" element={<InvoicePage />} />
-          <Route path="/supplies" element={<RecurringSupplyPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/signin" element={<SignInPage />} />

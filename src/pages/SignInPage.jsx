@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Shield } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, Loader2 } from 'lucide-react';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,20 +9,43 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const { signIn } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
-    const success = signIn(email, password);
-    if (success) {
-      navigate('/');
-    } else {
-      setError('Invalid credentials');
+    if (isSignUp && !name) {
+      setError('Please enter your name');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      let result;
+      if (isSignUp) {
+        result = await signUp(email, password, name);
+      } else {
+        result = await signIn(email, password);
+      }
+
+      if (result.success) {
+        navigate('/');
+      } else {
+        setError(result.error || 'Authentication failed');
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -39,8 +62,12 @@ export default function SignInPage() {
               MedEquip<span className="text-primary">Pro</span>
             </span>
           </Link>
-          <h1 className="text-2xl font-bold text-text-primary mt-2">Welcome Back</h1>
-          <p className="text-text-secondary text-sm mt-1">Sign in to your account to continue</p>
+          <h1 className="text-2xl font-bold text-text-primary mt-2">
+            {isSignUp ? 'Create Account' : 'Welcome Back'}
+          </h1>
+          <p className="text-text-secondary text-sm mt-1">
+            {isSignUp ? 'Sign up to get started' : 'Sign in to your account to continue'}
+          </p>
         </div>
 
         <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
@@ -48,6 +75,20 @@ export default function SignInPage() {
             {error && (
               <div className="bg-danger/10 text-danger text-sm px-4 py-2.5 rounded-lg">{error}</div>
             )}
+
+            {isSignUp && (
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">Full Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="John Doe"
+                  className="w-full px-4 py-2.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">Email</label>
               <div className="relative">
@@ -81,22 +122,38 @@ export default function SignInPage() {
                 </button>
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 accent-primary rounded" />
-                <span className="text-sm text-text-secondary">Remember me</span>
-              </label>
-              <a href="#" className="text-sm text-primary hover:underline font-medium">Forgot password?</a>
-            </div>
-            <Button variant="primary" size="lg" className="w-full" type="submit">
-              Sign In
+
+            {!isSignUp && (
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 accent-primary rounded" />
+                  <span className="text-sm text-text-secondary">Remember me</span>
+                </label>
+                <a href="#" className="text-sm text-primary hover:underline font-medium">Forgot password?</a>
+              </div>
+            )}
+
+            <Button variant="primary" size="lg" className="w-full" type="submit" disabled={loading}>
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 size={16} className="animate-spin" />
+                  {isSignUp ? 'Creating Account...' : 'Signing In...'}
+                </span>
+              ) : (
+                isSignUp ? 'Create Account' : 'Sign In'
+              )}
             </Button>
           </form>
 
           <div className="mt-5 pt-5 border-t border-border text-center">
             <p className="text-sm text-text-secondary">
-              Don't have an account?{' '}
-              <a href="#" className="text-primary font-medium hover:underline">Create Account</a>
+              {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+              <button
+                onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
+                className="text-primary font-medium hover:underline"
+              >
+                {isSignUp ? 'Sign In' : 'Create Account'}
+              </button>
             </p>
           </div>
         </div>

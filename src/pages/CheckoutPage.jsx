@@ -12,7 +12,7 @@ import {
 import Breadcrumbs from '../components/Breadcrumbs';
 import StepIndicator from '../components/StepIndicator';
 import Button from '../components/Button';
-import { cartItems } from '../data/mockData';
+import { useCart } from '../context/CartContext';
 
 const steps = ['Shipping', 'Payment', 'Review', 'Confirmation'];
 
@@ -20,9 +20,9 @@ export default function CheckoutPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [shippingMethod, setShippingMethod] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState('credit-card');
+  const { cartItems, subtotal } = useCart();
 
-  const subtotal = cartItems.reduce((s, item) => s + item.price * item.quantity, 0);
-  const shippingCost = shippingMethod === 'express' ? 29.99 : shippingMethod === 'white-glove' ? 149.99 : 0;
+    const shippingCost = shippingMethod === 'express' ? 29.99 : shippingMethod === 'white-glove' ? 149.99 : 0;
   const tax = subtotal * 0.085;
   const total = subtotal + shippingCost + tax;
 
@@ -45,9 +45,6 @@ export default function CheckoutPage() {
       <h1 className="text-2xl font-bold text-text-primary text-center mb-8">
         Secure Checkout
       </h1>
-
-      {/* Step indicator — commented out */}
-      {/* <StepIndicator steps={steps} currentStep={currentStep} /> */}
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Form */}
@@ -121,35 +118,6 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Payment Method — commented out: handled by payment gateway provider */}
-          {/*
-          <div className="bg-white rounded-xl border border-border p-6">
-            <h2 className="text-lg font-bold text-text-primary mb-5 flex items-center gap-2">
-              <Lock size={20} className="text-primary" />
-              Payment Method
-            </h2>
-            <div className="flex border-b border-border mb-5">
-              {paymentMethods.map((pm) => (
-                <button
-                  key={pm.id}
-                  onClick={() => setPaymentMethod(pm.id)}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    paymentMethod === pm.id
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  <pm.icon size={16} />
-                  {pm.label}
-                </button>
-              ))}
-            </div>
-            {paymentMethod === 'credit-card' && ( ... )}
-            {paymentMethod === 'purchase-order' && ( ... )}
-            {paymentMethod === 'wire-transfer' && ( ... )}
-          </div>
-          */}
-
           {/* Payment will be processed by payment gateway */}
           <div className="bg-white rounded-xl border border-border p-6">
             <div className="flex items-center gap-2 mb-2">
@@ -177,16 +145,20 @@ export default function CheckoutPage() {
           <div className="bg-white rounded-xl border border-border p-6 sticky top-24">
             <h3 className="text-lg font-bold text-text-primary mb-5">Order Summary</h3>
             <div className="space-y-4 mb-5">
-              {cartItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-3">
-                  <img src={item.image} alt={item.name} className="w-14 h-14 rounded-lg object-cover" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">{item.name}</p>
-                    <p className="text-xs text-text-secondary">Qty: {item.quantity}</p>
+              {cartItems.length === 0 ? (
+                <p className="text-sm text-text-secondary text-center py-4">No items in cart</p>
+              ) : (
+                cartItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3">
+                    <img src={item.image} alt={item.name} className="w-14 h-14 rounded-lg object-cover" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-text-primary truncate">{item.name}</p>
+                      <p className="text-xs text-text-secondary">Qty: {item.quantity}</p>
+                    </div>
+                    <p className="text-sm font-semibold">${(item.price * item.quantity).toLocaleString()}</p>
                   </div>
-                  <p className="text-sm font-semibold">${(item.price * item.quantity).toLocaleString()}</p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="border-t border-border pt-4 space-y-2 text-sm">
               <div className="flex justify-between">

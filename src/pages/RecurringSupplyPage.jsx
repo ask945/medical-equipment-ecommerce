@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   RefreshCw,
@@ -15,19 +15,36 @@ import {
   CheckCircle,
   Package,
   ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { PublicHeader } from '../components/Header';
 import Footer from '../components/Footer';
 import KPICard from '../components/KPICard';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
-import { subscriptions as initialSubs, products } from '../data/mockData';
+import { getProducts } from '../services/productService';
 
 export default function RecurringSupplyPage() {
-  const [subs, setSubs] = useState(initialSubs);
-  const [selectedId, setSelectedId] = useState(subs[0]?.id);
-  const selected = subs.find((s) => s.id === selectedId);
+  const [subs, setSubs] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
 
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const prods = await getProducts();
+        setProducts(prods);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const selected = subs.find((s) => s.id === selectedId);
   const activeSubs = subs.filter((s) => s.status === 'active').length;
   const monthlySpend = subs
     .filter((s) => s.status === 'active')
@@ -50,6 +67,14 @@ export default function RecurringSupplyPage() {
 
   // Suggest products the user can add to auto-refill
   const suggestedProducts = products.slice(0, 3);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background animate-fade-in">
@@ -130,50 +155,59 @@ export default function RecurringSupplyPage() {
                 Add New
               </Button>
             </div>
-            {subs.map((sub) => (
-              <div
-                key={sub.id}
-                onClick={() => setSelectedId(sub.id)}
-                className={`bg-white rounded-xl border-2 p-5 flex gap-4 cursor-pointer transition-all hover:shadow-sm ${
-                  selectedId === sub.id
-                    ? 'border-primary shadow-sm'
-                    : 'border-border'
-                }`}
-              >
-                <img
-                  src={sub.image}
-                  alt={sub.name}
-                  className="w-16 h-16 rounded-lg object-cover shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-text-primary">
-                        {sub.name}
-                      </p>
-                      <p className="text-xs text-text-secondary mt-0.5">
-                        {sub.frequency} • Qty: {sub.quantity}
-                      </p>
+
+            {subs.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-xl border border-border">
+                <RefreshCw size={40} className="mx-auto text-gray-300 mb-3" />
+                <p className="text-sm text-text-secondary">No auto-refills set up yet. Browse products to add your first refill.</p>
+                <Button variant="primary" size="sm" href="/products" className="mt-4">Browse Products</Button>
+              </div>
+            ) : (
+              subs.map((sub) => (
+                <div
+                  key={sub.id}
+                  onClick={() => setSelectedId(sub.id)}
+                  className={`bg-white rounded-xl border-2 p-5 flex gap-4 cursor-pointer transition-all hover:shadow-sm ${
+                    selectedId === sub.id
+                      ? 'border-primary shadow-sm'
+                      : 'border-border'
+                  }`}
+                >
+                  <img
+                    src={sub.image}
+                    alt={sub.name}
+                    className="w-16 h-16 rounded-lg object-cover shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {sub.name}
+                        </p>
+                        <p className="text-xs text-text-secondary mt-0.5">
+                          {sub.frequency} • Qty: {sub.quantity}
+                        </p>
+                      </div>
+                      <StatusBadge status={sub.status} />
                     </div>
-                    <StatusBadge status={sub.status} />
-                  </div>
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-text-primary">
-                        ${sub.price}/unit
-                      </p>
-                      <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full font-bold">
-                        SAVE 15%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-text-secondary">
-                      <Truck size={12} />
-                      <span>Next: {sub.nextDelivery}</span>
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-text-primary">
+                          ${sub.price}/unit
+                        </p>
+                        <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full font-bold">
+                          SAVE 15%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-text-secondary">
+                        <Truck size={12} />
+                        <span>Next: {sub.nextDelivery}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
 
             {/* How it works */}
             <div className="bg-white rounded-xl border border-border p-6 mt-6">
@@ -215,39 +249,41 @@ export default function RecurringSupplyPage() {
             </div>
 
             {/* Suggested Add-ons */}
-            <div className="mt-6">
-              <h3 className="text-lg font-bold text-text-primary mb-4">
-                Add to Your Refills
-              </h3>
-              <div className="grid sm:grid-cols-3 gap-4">
-                {suggestedProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="bg-white rounded-xl border border-border p-4 hover:shadow-sm transition-shadow"
-                  >
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-28 object-cover rounded-lg mb-3"
-                    />
-                    <p className="text-sm font-semibold text-text-primary line-clamp-1">
-                      {product.name}
-                    </p>
-                    <p className="text-sm font-bold text-primary mt-1">
-                      ${product.price}
-                    </p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={Plus}
-                      className="w-full mt-3"
+            {suggestedProducts.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-bold text-text-primary mb-4">
+                  Add to Your Refills
+                </h3>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  {suggestedProducts.map((product) => (
+                    <div
+                      key={product.id}
+                      className="bg-white rounded-xl border border-border p-4 hover:shadow-sm transition-shadow"
                     >
-                      Add to Refill
-                    </Button>
-                  </div>
-                ))}
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-full h-28 object-cover rounded-lg mb-3"
+                      />
+                      <p className="text-sm font-semibold text-text-primary line-clamp-1">
+                        {product.name}
+                      </p>
+                      <p className="text-sm font-bold text-primary mt-1">
+                        ${product.price}
+                      </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={Plus}
+                        className="w-full mt-3"
+                      >
+                        Add to Refill
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Quick Actions Sidebar */}

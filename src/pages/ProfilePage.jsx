@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import AddressBook from '../components/AddressBook';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, MapPin, Package, Heart, Settings, LogOut, ChevronRight, Edit3, Plus, Trash2, Shield } from 'lucide-react';
+import { User, MapPin, Package, Heart, Settings, LogOut, ChevronRight, Edit3, Plus, Trash2, Shield, Loader2 } from 'lucide-react';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
-import { orders } from '../data/mockData';
+import { getOrders } from '../services/orderService';
 import StatusBadge from '../components/StatusBadge';
 
 const tabs = [
@@ -19,6 +20,18 @@ export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const { items: wishlistItems, removeItem } = useWishlist();
   const navigate = useNavigate();
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'orders' && user?.uid) {
+      setOrdersLoading(true);
+      getOrders(user.uid)
+        .then(setOrders)
+        .catch((err) => console.error('Error fetching orders:', err))
+        .finally(() => setOrdersLoading(false));
+    }
+  }, [activeTab, user]);
 
   if (!user) {
     navigate('/signin');
@@ -74,7 +87,7 @@ export default function ProfilePage() {
             <div className="bg-white rounded-xl border border-border p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-text-primary">Personal Information</h2>
-                <Button variant="secondary" size="sm" icon={Edit3}>Edit Profile</Button>
+                <Button variant="secondary" size="sm" icon={Edit3} onClick={() => alert('Profile editing coming soon')}>Edit Profile</Button>
               </div>
               <div className="grid sm:grid-cols-2 gap-6">
                 <div>
@@ -87,11 +100,11 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Phone</label>
-                  <p className="text-sm text-text-primary mt-1">{user.phone}</p>
+                  <p className="text-sm text-text-primary mt-1">{user.phone || '—'}</p>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Member Since</label>
-                  <p className="text-sm text-text-primary mt-1">January 2025</p>
+                  <p className="text-sm text-text-primary mt-1">{user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</p>
                 </div>
               </div>
               <div className="mt-6 pt-6 border-t border-border">
@@ -110,27 +123,34 @@ export default function ProfilePage() {
                 <h2 className="text-lg font-bold text-text-primary">Saved Addresses</h2>
                 <Button variant="secondary" size="sm" icon={Plus}>Add Address</Button>
               </div>
-              {user.addresses.map((addr) => (
-                <div key={addr.id} className="bg-white rounded-xl border border-border p-5 flex items-start justify-between">
-                  <div className="flex gap-3">
-                    <div className="w-10 h-10 bg-primary-light rounded-lg flex items-center justify-center shrink-0">
-                      <MapPin size={18} className="text-primary" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-text-primary">{addr.label}</p>
-                        {addr.isDefault && <span className="text-[10px] bg-primary-light text-primary px-1.5 py-0.5 rounded-full font-bold">DEFAULT</span>}
-                      </div>
-                      <p className="text-sm text-text-secondary mt-1">{addr.street}</p>
-                      <p className="text-sm text-text-secondary">{addr.city}, {addr.state} {addr.zip}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button className="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary-light transition-colors"><Edit3 size={14} /></button>
-                    <button className="p-2 rounded-lg text-text-secondary hover:text-danger hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
-                  </div>
+              {(user.addresses || []).length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-border">
+                  <MapPin size={40} className="mx-auto text-gray-300 mb-3" />
+                  <p className="text-sm text-text-secondary">No saved addresses yet.</p>
                 </div>
-              ))}
+              ) : (
+                (user.addresses || []).map((addr) => (
+                  <div key={addr.id} className="bg-white rounded-xl border border-border p-5 flex items-start justify-between">
+                    <div className="flex gap-3">
+                      <div className="w-10 h-10 bg-primary-light rounded-lg flex items-center justify-center shrink-0">
+                        <MapPin size={18} className="text-primary" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-text-primary">{addr.label}</p>
+                          {addr.isDefault && <span className="text-[10px] bg-primary-light text-primary px-1.5 py-0.5 rounded-full font-bold">DEFAULT</span>}
+                        </div>
+                        <p className="text-sm text-text-secondary mt-1">{addr.street}</p>
+                        <p className="text-sm text-text-secondary">{addr.city}, {addr.state} {addr.zip}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button className="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary-light transition-colors"><Edit3 size={14} /></button>
+                      <button className="p-2 rounded-lg text-text-secondary hover:text-danger hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -138,26 +158,39 @@ export default function ProfilePage() {
           {activeTab === 'orders' && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-text-primary">Recent Orders</h2>
-              {orders.slice(0, 3).map((order) => (
-                <Link
-                  key={order.id}
-                  to={`/orders/${order.id}`}
-                  className="block bg-white rounded-xl border border-border p-5 hover:shadow-sm hover:border-primary/30 transition-all group"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-text-primary">{order.id}</p>
-                      <p className="text-xs text-text-secondary mt-0.5">{order.date} • {order.items.length} item(s)</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <p className="text-sm font-bold text-text-primary">${order.total.toFixed(2)}</p>
-                      <StatusBadge status={order.status} />
-                      <ChevronRight size={16} className="text-text-secondary group-hover:text-primary" />
-                    </div>
-                  </div>
-                </Link>
-              ))}
-              <Button variant="secondary" href="/orders" className="w-full">View All Orders</Button>
+              {ordersLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 size={24} className="animate-spin text-primary" />
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-border">
+                  <Package size={40} className="mx-auto text-gray-300 mb-3" />
+                  <p className="text-sm text-text-secondary">No orders yet.</p>
+                </div>
+              ) : (
+                <>
+                  {orders.slice(0, 3).map((order) => (
+                    <Link
+                      key={order.id}
+                      to={`/orders/${order.id}`}
+                      className="block bg-white rounded-xl border border-border p-5 hover:shadow-sm hover:border-primary/30 transition-all group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-text-primary">{order.id}</p>
+                          <p className="text-xs text-text-secondary mt-0.5">{order.date} • {(order.items || []).length} item(s)</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <p className="text-sm font-bold text-text-primary">${(order.total || 0).toFixed(2)}</p>
+                          <StatusBadge status={order.status} />
+                          <ChevronRight size={16} className="text-text-secondary group-hover:text-primary" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                  <Button variant="secondary" href="/orders" className="w-full">View All Orders</Button>
+                </>
+              )}
             </div>
           )}
 

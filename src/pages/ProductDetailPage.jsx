@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Star,
@@ -12,21 +12,62 @@ import {
   Shield,
   RotateCcw,
   Download,
+  Loader2,
 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import Button from '../components/Button';
 import ProductCard from '../components/ProductCard';
-import { products } from '../data/mockData';
+import { getProductById, getProducts } from '../services/productService';
 
 export default function ProductDetailPage() {
   const { id } = useParams();
-  const product = products.find((p) => p.id === parseInt(id)) || products[0];
+  const [product, setProduct] = useState(null);
+  const [relatedProducts, setRelatedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
   const [selectedImage, setSelectedImage] = useState(0);
 
-  const images = [product.image, ...products.slice(1, 4).map((p) => p.image)];
-  const relatedProducts = products.filter((p) => p.id !== product.id).slice(0, 4);
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const prod = await getProductById(id);
+        setProduct(prod);
+        if (prod) {
+          const allProducts = await getProducts();
+          setRelatedProducts(allProducts.filter((p) => p.id !== prod.id).slice(0, 4));
+        }
+      } catch (err) {
+        console.error('Error fetching product:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    setLoading(true);
+    setSelectedImage(0);
+    setQuantity(1);
+    setActiveTab('description');
+    fetchData();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="container-main py-20 text-center">
+        <p className="text-lg font-medium text-text-primary mb-2">Product not found</p>
+        <Button variant="primary" href="/products">Browse Products</Button>
+      </div>
+    );
+  }
+
+  const images = [product.image, ...relatedProducts.slice(0, 3).map((p) => p.image)].filter(Boolean);
   const tabs = ['description', 'specifications', 'reviews', 'documentation'];
 
   return (
@@ -92,7 +133,7 @@ export default function ProductDetailPage() {
                   key={i}
                   size={16}
                   className={
-                    i < Math.floor(product.rating)
+                    i < Math.floor(product.rating || 0)
                       ? 'text-warning fill-warning'
                       : 'text-gray-200 fill-gray-200'
                   }
@@ -100,13 +141,13 @@ export default function ProductDetailPage() {
               ))}
             </div>
             <span className="text-sm font-medium text-text-primary">{product.rating}</span>
-            <span className="text-sm text-text-secondary">({product.reviews} reviews)</span>
+            <span className="text-sm text-text-secondary">({product.reviews || 0} reviews)</span>
           </div>
 
           {/* Price */}
           <div className="flex items-baseline gap-3 mb-6">
             <span className="text-3xl font-bold text-text-primary">
-              ${product.price.toLocaleString()}
+              ${(product.price || 0).toLocaleString()}
             </span>
             {product.originalPrice && (
               <>
@@ -214,7 +255,7 @@ export default function ProductDetailPage() {
               </p>
             </div>
           )}
-          {activeTab === 'specifications' && (
+          {activeTab === 'specifications' && product.specs && (
             <table className="w-full">
               <tbody>
                 {Object.entries(product.specs).map(([key, val], i) => (
@@ -283,14 +324,16 @@ export default function ProductDetailPage() {
       </div>
 
       {/* Related Products */}
-      <div>
-        <h2 className="text-2xl font-bold text-text-primary mb-6">Related Products</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {relatedProducts.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
+      {relatedProducts.length > 0 && (
+        <div>
+          <h2 className="text-2xl font-bold text-text-primary mb-6">Related Products</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {relatedProducts.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

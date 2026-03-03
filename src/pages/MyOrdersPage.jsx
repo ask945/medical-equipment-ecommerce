@@ -1,9 +1,39 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, ChevronRight, Search } from 'lucide-react';
+import { Package, ChevronRight, Loader2 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
-import { orders } from '../data/mockData';
+import { useAuth } from '../context/AuthContext';
+import { getOrders } from '../services/orderService';
 
 export default function MyOrdersPage() {
+  const { user } = useAuth();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchOrders() {
+      try {
+        if (user?.uid) {
+          const data = await getOrders(user.uid);
+          setOrders(data);
+        }
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchOrders();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="container-main animate-fade-in py-8">
       <h1 className="text-2xl font-bold text-text-primary mb-2">My Orders</h1>
@@ -40,14 +70,14 @@ export default function MyOrdersPage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex -space-x-2">
-                  {order.items.slice(0, 3).map((item, i) => (
+                  {(order.items || []).slice(0, 3).map((item, i) => (
                     <img key={i} src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover border-2 border-white" />
                   ))}
                 </div>
                 <p className="text-sm text-text-secondary flex-1">
-                  {order.items.map((i) => i.name).join(', ')}
+                  {(order.items || []).map((i) => i.name).join(', ')}
                 </p>
-                <p className="text-lg font-bold text-text-primary">${order.total.toFixed(2)}</p>
+                <p className="text-lg font-bold text-text-primary">${(order.total || 0).toFixed(2)}</p>
               </div>
             </Link>
           ))}

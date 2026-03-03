@@ -1,13 +1,37 @@
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Package, Truck, MapPin, Copy, CheckCircle, Clock, ArrowLeft } from 'lucide-react';
+import { Package, Truck, MapPin, Copy, CheckCircle, Clock, ArrowLeft, Loader2 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import Breadcrumbs from '../components/Breadcrumbs';
 import Button from '../components/Button';
-import { orders } from '../data/mockData';
+import { getOrderById } from '../services/orderService';
 
 export default function OrderDetailPage() {
   const { orderId } = useParams();
-  const order = orders.find((o) => o.id === orderId);
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchOrder() {
+      try {
+        const data = await getOrderById(orderId);
+        setOrder(data);
+      } catch (err) {
+        console.error('Error fetching order:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchOrder();
+  }, [orderId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!order) {
     return (
@@ -64,7 +88,7 @@ export default function OrderDetailPage() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-border p-5">
           <h3 className="font-semibold text-text-primary mb-4">Items Ordered</h3>
           <div className="space-y-4">
-            {order.items.map((item, i) => (
+            {(order.items || []).map((item, i) => (
               <div key={i} className="flex gap-4 items-center">
                 <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover" />
                 <div className="flex-1 min-w-0">
@@ -77,7 +101,7 @@ export default function OrderDetailPage() {
           </div>
           <div className="mt-4 pt-4 border-t border-border flex justify-between">
             <span className="text-sm font-semibold text-text-primary">Order Total</span>
-            <span className="text-lg font-bold text-primary">${order.total.toFixed(2)}</span>
+            <span className="text-lg font-bold text-primary">${(order.total || 0).toFixed(2)}</span>
           </div>
         </div>
 

@@ -12,20 +12,28 @@ import {
   Package,
 } from 'lucide-react';
 import Button from './Button';
-import { navLinks, categories } from '../data/mockData';
+import { navLinks } from '../data/mockData';
+import { getCategories } from '../services/categoryService';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
 
-export function PublicHeader({ cartCount = 3 }) {
+export function PublicHeader({ cartCount = 0 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
   const dropdownRef = useRef(null);
   const userMenuRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, signOut } = useAuth();
   const { count: wishlistCount } = useWishlist();
+
+  useEffect(() => {
+    getCategories()
+      .then(setCategories)
+      .catch((err) => console.error('Error fetching categories:', err));
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -86,12 +94,23 @@ export function PublicHeader({ cartCount = 3 }) {
                         {categories.map((cat) => (
                           <Link
                             key={cat.id}
-                            to={`/products?category=${encodeURIComponent(cat.name)}`}
+                            to={`/products?category=${encodeURIComponent(cat.label || cat.name)}`}
                             className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-secondary hover:text-primary hover:bg-gray-50 transition-colors"
                             onClick={() => setDropdownOpen(false)}
                           >
-                            <img src={cat.image} alt={cat.name} className="w-8 h-8 rounded-lg object-cover" />
-                            {cat.name}
+                            {cat.image ? (
+                              <img 
+                                src={cat.image} 
+                                alt="" 
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                                className="w-8 h-8 rounded-lg object-cover" 
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-primary-light flex items-center justify-center text-primary font-bold text-xs">
+                                <Box size={24} />
+                              </div>
+                            )}
+                            <span className="font-medium">{cat.label || cat.name}</span>
                           </Link>
                         ))}
                       </div>
@@ -113,18 +132,6 @@ export function PublicHeader({ cartCount = 3 }) {
               );
             })}
           </nav>
-
-          {/* Search bar */}
-          {/* <div className="hidden md:flex flex-1 max-w-md">
-            <div className="relative w-full">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
-              <input
-                type="text"
-                placeholder="Search glucose monitors, CPAP masks..."
-                className="w-full pl-10 pr-4 py-2 text-sm border border-border rounded-lg bg-gray-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-              />
-            </div>
-          </div> */}
 
           {/* Actions */}
           <div className="flex items-center gap-2">
@@ -233,11 +240,11 @@ export function PublicHeader({ cartCount = 3 }) {
             {categories.map((cat) => (
               <Link
                 key={cat.id}
-                to={`/products?category=${encodeURIComponent(cat.name)}`}
+                to={`/products?category=${encodeURIComponent(cat.label || cat.name)}`}
                 className="block px-6 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-primary hover:bg-gray-50"
                 onClick={() => setMobileOpen(false)}
               >
-                {cat.name}
+                {cat.label || cat.name}
               </Link>
             ))}
           </div>
