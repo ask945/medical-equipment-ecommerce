@@ -75,9 +75,8 @@ export function PublicHeader({ cartCount = 3 }) {
                   <div key={link.label} className="relative" ref={dropdownRef}>
                     <button
                       onClick={() => setDropdownOpen(!dropdownOpen)}
-                      className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        dropdownOpen ? 'text-primary bg-primary-light' : 'text-text-secondary hover:text-primary hover:bg-gray-50'
-                      }`}
+                      className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${dropdownOpen ? 'text-primary bg-primary-light' : 'text-text-secondary hover:text-primary hover:bg-gray-50'
+                        }`}
                     >
                       {link.label}
                       <ChevronDown size={14} className={`transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
@@ -104,11 +103,10 @@ export function PublicHeader({ cartCount = 3 }) {
                 <Link
                   key={link.path + link.label}
                   to={link.path}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    location.pathname === link.path
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === link.path
                       ? 'text-primary bg-primary-light'
                       : 'text-text-secondary hover:text-primary hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   {link.label}
                 </Link>
@@ -117,7 +115,7 @@ export function PublicHeader({ cartCount = 3 }) {
           </nav>
 
           {/* Search bar */}
-          <div className="hidden md:flex flex-1 max-w-md">
+          {/* <div className="hidden md:flex flex-1 max-w-md">
             <div className="relative w-full">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
               <input
@@ -126,7 +124,7 @@ export function PublicHeader({ cartCount = 3 }) {
                 className="w-full pl-10 pr-4 py-2 text-sm border border-border rounded-lg bg-gray-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
               />
             </div>
-          </div>
+          </div> */}
 
           {/* Actions */}
           <div className="flex items-center gap-2">
