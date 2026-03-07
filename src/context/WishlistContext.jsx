@@ -28,7 +28,11 @@ export function WishlistProvider({ children }) {
           setItems([]);
         }
       } catch (err) {
-        console.error('Failed to load wishlist:', err);
+        if (err.code === 'permission-denied') {
+          console.warn('Wishlist access denied. This is expected for admin accounts or guests without proper rules.');
+        } else {
+          console.error('Failed to load wishlist:', err);
+        }
       } finally {
         setLoading(false);
       }

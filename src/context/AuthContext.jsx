@@ -30,7 +30,13 @@ export function AuthProvider({ children }) {
           });
           profile = await getUserProfile(firebaseUser.uid);
         }
-        setUser({ uid: firebaseUser.uid, ...profile });
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+          avatar: firebaseUser.photoURL || `https://i.pravatar.cc/100?u=${firebaseUser.uid}`,
+          ...profile
+        });
       } else {
         setUser(null);
       }

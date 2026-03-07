@@ -38,7 +38,7 @@ export default function SignInPage() {
       }
 
       if (result.success) {
-        navigate('/');
+        navigate('/admin');
       } else {
         setError(result.error || 'Authentication failed');
       }
@@ -56,10 +56,10 @@ export default function SignInPage() {
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-4">
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">M</span>
+              <span className="text-white font-bold text-xl">B</span>
             </div>
             <span className="text-2xl font-bold text-text-primary">
-              MedEquip<span className="text-primary">Pro</span>
+              Bluecare <span className="text-primary">Pharma</span>
             </span>
           </Link>
           <h1 className="text-2xl font-bold text-text-primary mt-2">

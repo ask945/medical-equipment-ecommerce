@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Search,
   ShoppingCart,
   User,
   Menu,
@@ -10,6 +9,7 @@ import {
   ChevronDown,
   LogOut,
   Package,
+  LayoutDashboard,
 } from 'lucide-react';
 import Button from './Button';
 import { navLinks } from '../data/mockData';
@@ -71,7 +71,7 @@ export function PublicHeader({ cartCount = 0 }) {
               <span className="text-white font-bold text-lg">M</span>
             </div>
             <span className="text-xl font-bold text-text-primary">
-              MedEquip<span className="text-primary">Pro</span>
+              Bluecare<span className="text-primary">Pharma</span>
             </span>
           </Link>
 
@@ -99,11 +99,11 @@ export function PublicHeader({ cartCount = 0 }) {
                             onClick={() => setDropdownOpen(false)}
                           >
                             {cat.image ? (
-                              <img 
-                                src={cat.image} 
-                                alt="" 
+                              <img
+                                src={cat.image}
+                                alt=""
                                 onError={(e) => { e.target.style.display = 'none'; }}
-                                className="w-8 h-8 rounded-lg object-cover" 
+                                className="w-8 h-8 rounded-lg object-cover"
                               />
                             ) : (
                               <div className="w-8 h-8 rounded-lg bg-primary-light flex items-center justify-center text-primary font-bold text-xs">
@@ -165,16 +165,25 @@ export function PublicHeader({ cartCount = 0 }) {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20"
-                  />
-                  <span className="text-sm font-medium text-text-primary hidden sm:block">{user.name.split(' ')[0]}</span>
+                  <div className="w-8 h-8 rounded-full bg-primary-light flex items-center justify-center text-primary font-bold text-xs ring-2 ring-primary/20">
+                    {(user?.name || user?.email || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium text-text-primary hidden sm:block">
+                    {(user?.name || user?.email || 'User').split(' ')[0]}
+                  </span>
                   <ChevronDown size={14} className={`text-text-secondary transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {userMenuOpen && (
                   <div className="absolute top-full right-0 mt-1 w-48 bg-white border border-border rounded-xl shadow-lg py-2 animate-fade-in z-50">
+                    {user?.role === 'admin' && (
+                      <Link
+                        to="/admin"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary font-bold hover:bg-primary-light transition-colors"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <LayoutDashboard size={16} /> Admin Dashboard
+                      </Link>
+                    )}
                     <Link
                       to="/profile"
                       className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-secondary hover:text-primary hover:bg-gray-50 transition-colors"
@@ -226,6 +235,15 @@ export function PublicHeader({ cartCount = 0 }) {
       {mobileOpen && (
         <div className="lg:hidden border-t border-border bg-white animate-fade-in">
           <div className="container-main py-4 space-y-1">
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className="block px-4 py-2.5 rounded-lg text-sm font-bold text-primary hover:bg-primary-light"
+                onClick={() => setMobileOpen(false)}
+              >
+                Admin Dashboard
+              </Link>
+            )}
             {navLinks.filter((l) => !l.hasDropdown).map((link) => (
               <Link
                 key={link.path + link.label}
@@ -262,10 +280,10 @@ export function DashboardHeader({ title = 'My Account', breadcrumbs = [] }) {
           <div className="flex items-center gap-4">
             <Link to="/" className="flex items-center gap-2 shrink-0">
               <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">M</span>
+                <span className="text-white font-bold text-lg">B</span>
               </div>
               <span className="text-xl font-bold text-text-primary">
-                MedEquip<span className="text-primary">Pro</span>
+                Bluecare<span className="text-primary">Pharma</span>
               </span>
             </Link>
             <span className="text-border">|</span>

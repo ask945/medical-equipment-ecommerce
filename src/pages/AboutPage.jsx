@@ -1,4 +1,4 @@
-import { Shield, Users, Award, Heart, Truck, Clock, CheckCircle, Stethoscope } from 'lucide-react';
+import { Shield, Users, Award, Heart, Truck, Clock, CheckCircle } from 'lucide-react';
 import Button from '../components/Button';
 
 export default function AboutPage() {
@@ -19,7 +19,7 @@ export default function AboutPage() {
               </span>
 
               <h1 className="text-4xl lg:text-5xl font-extrabold text-text-primary mb-6 leading-tight">
-                About <span className="text-primary">MedEquip Pro</span>
+                About <span className="text-primary">Bluecare Pharma</span>
               </h1>
 
               <p className="text-lg text-text-secondary leading-relaxed mb-6">
@@ -119,7 +119,7 @@ export default function AboutPage() {
             </h2>
 
             <p className="text-text-secondary leading-relaxed mb-4">
-              MedEquip Pro started with a simple frustration: buying healthcare products online
+              Bluecare Pharma  started with a simple frustration: buying healthcare products online
               shouldn't feel risky, overpriced, or confusing.
             </p>
 

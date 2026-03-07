@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, FileText, AlertTriangle, Clock, Search, Download, Eye, Loader2 } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, RefreshCw, Settings, DollarSign, FileText, AlertTriangle, Clock, Search, Download, Eye, Loader2 } from 'lucide-react';
 import { DashboardHeader } from '../components/Header';
 import DashboardSidebar from '../components/DashboardSidebar';
 import KPICard from '../components/KPICard';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
 import { getAllOrders } from '../services/orderService';
+
+const menuItems = [
+  { icon: LayoutDashboard, label: 'My Account', path: '/profile' },
+  { icon: ShoppingBag, label: 'Order History', path: '/invoices' },
+  { icon: RefreshCw, label: 'Auto-Refills', path: '/supplies' },
+  { icon: Settings, label: 'Settings', path: '#' },
+];
 
 export default function InvoicePage() {
   const [invoices, setInvoices] = useState([]);
@@ -40,7 +47,7 @@ export default function InvoicePage() {
     <div className="min-h-screen bg-background">
       <DashboardHeader title="Order History" breadcrumbs={[{ label: 'My Account', href: '/invoices' }, { label: 'Orders' }]} />
       <div className="flex">
-        <DashboardSidebar />
+        <DashboardSidebar menuItems={menuItems} />
         <main className="flex-1 p-6 animate-fade-in">
           {loading ? (
             <div className="flex items-center justify-center min-h-[40vh]">

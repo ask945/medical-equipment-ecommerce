@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AddressBook from '../components/AddressBook';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, MapPin, Package, Heart, Settings, LogOut, ChevronRight, Edit3, Plus, Trash2, Shield, Loader2 } from 'lucide-react';
+import { User, MapPin, Package, Heart, Settings, LogOut, ChevronRight, Edit3, Plus, Trash2, Shield, Loader2, LayoutDashboard } from 'lucide-react';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -51,20 +51,30 @@ export default function ProfilePage() {
         {/* Sidebar */}
         <div className="bg-white rounded-xl border border-border p-4">
           <div className="flex items-center gap-3 mb-6 pb-4 border-b border-border">
-            <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/20" />
-            <div>
-              <p className="text-sm font-semibold text-text-primary">{user.name}</p>
-              <p className="text-xs text-text-secondary">{user.email}</p>
+            <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center text-primary font-bold text-sm ring-2 ring-primary/20 shrink-0">
+              {(user?.name || user?.email || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text-primary truncate">{user.name}</p>
+              <p className="text-xs text-text-secondary truncate">{user.email}</p>
             </div>
           </div>
           <nav className="space-y-1">
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-primary bg-primary-light hover:bg-primary/10 transition-colors mb-2"
+              >
+                <LayoutDashboard size={16} />
+                Admin Dashboard
+              </Link>
+            )}
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === tab.id ? 'bg-primary-light text-primary' : 'text-text-secondary hover:bg-gray-50 hover:text-text-primary'
-                }`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-primary-light text-primary' : 'text-text-secondary hover:bg-gray-50 hover:text-text-primary'
+                  }`}
               >
                 <tab.icon size={16} />
                 {tab.label}

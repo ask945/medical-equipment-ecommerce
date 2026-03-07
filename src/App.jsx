@@ -17,8 +17,31 @@ import WishlistPage from './pages/WishlistPage';
 import MyOrdersPage from './pages/MyOrdersPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import ProfilePage from './pages/ProfilePage';
+import AdminPage from './pages/admin/AdminPage';
+import AdminOrdersPage from './pages/admin/AdminOrdersPage';
+import AdminProductsPage from './pages/admin/AdminProductsPage';
+import AdminAddProductPage from './pages/admin/AdminAddProductPage';
+import AdminEditProductPage from './pages/admin/AdminEditProductPage';
+import AdminUsersPage from './pages/admin/AdminUsersPage';
+import AdminBrandsPage from './pages/admin/AdminBrandsPage';
+import AdminCategoriesPage from './pages/admin/AdminCategoriesPage';
+import AdminCouponsPage from './pages/admin/AdminCouponsPage';
+import AdminBannersPage from './pages/admin/AdminBannersPage';
+import AdminAnnouncementsPage from './pages/admin/AdminAnnouncementsPage';
 
-const dashboardRoutes = ['/invoices'];
+const dashboardRoutes = [
+  '/invoices',
+  '/admin',
+  '/admin/orders',
+  '/admin/products',
+  '/admin/products/add',
+  '/admin/users',
+  '/admin/brands',
+  '/admin/categories',
+  '/admin/coupons',
+  '/admin/banners',
+  '/admin/announcements'
+];
 
 function AppLayout() {
   const location = useLocation();
@@ -28,7 +51,9 @@ function AppLayout() {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div></div>;
   }
 
-  const isDashboard = dashboardRoutes.includes(location.pathname);
+  // Check if current path starts with /admin/products/edit/
+  const isDashboard = dashboardRoutes.some(path => location.pathname === path) ||
+    location.pathname.startsWith('/admin/products/edit/');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -48,6 +73,19 @@ function AppLayout() {
           <Route path="/orders" element={<MyOrdersPage />} />
           <Route path="/orders/:orderId" element={<OrderDetailPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/admin" element={<AdminPage />}>
+            <Route index element={<div />} /> {/* Root handled by AdminPage's internal logic */}
+            <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="products" element={<AdminProductsPage />} />
+            <Route path="products/add" element={<AdminAddProductPage />} />
+            <Route path="products/edit/:id" element={<AdminEditProductPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="brands" element={<AdminBrandsPage />} />
+            <Route path="categories" element={<AdminCategoriesPage />} />
+            <Route path="coupons" element={<AdminCouponsPage />} />
+            <Route path="banners" element={<AdminBannersPage />} />
+            <Route path="announcements" element={<AdminAnnouncementsPage />} />
+          </Route>
         </Routes>
       </main>
       {!isDashboard && <Footer />}
