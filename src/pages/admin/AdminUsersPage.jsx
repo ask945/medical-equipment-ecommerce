@@ -115,20 +115,30 @@ const AdminUsersPage = () => {
 
             setUsers(combinedList);
 
-            // Calculate stats
+            // Calculate stats with real month-over-month growth
             const now = new Date();
-            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const newUsers = combinedList.filter(user =>
-                user.createdAt && (user.createdAt.seconds
-                    ? new Date(user.createdAt.seconds * 1000)
-                    : new Date(user.createdAt)) >= firstDayOfMonth
-            );
-            const bannedUsers = combinedList.filter(user => user.isBanned);
+            const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+            const getDate = (u) => u.createdAt?.seconds ? new Date(u.createdAt.seconds * 1000) : (u.createdAt ? new Date(u.createdAt) : null);
+
+            const usersBeforeThisMonth = combinedList.filter(u => { const d = getDate(u); return d && d < firstDayThisMonth; });
+            const usersBeforeLastMonth = combinedList.filter(u => { const d = getDate(u); return d && d < firstDayLastMonth; });
+
+            const totalNow = combinedList.length;
+            const totalLastMonth = usersBeforeThisMonth.length;
+            const totalGrowth = totalLastMonth > 0 ? Math.round(((totalNow - totalLastMonth) / totalLastMonth) * 100) : 0;
+
+            const activeNow = combinedList.filter(u => !u.isBanned).length;
+            const activeLastMonth = usersBeforeThisMonth.filter(u => !u.isBanned).length;
+            const activeGrowth = activeLastMonth > 0 ? Math.round(((activeNow - activeLastMonth) / activeLastMonth) * 100) : 0;
 
             setStats({
-                total: combinedList.length.toLocaleString(),
+                total: totalNow.toLocaleString(),
+                totalGrowth,
                 admins: combinedList.filter(u => u.role === 'Admin').length.toLocaleString(),
-                active: combinedList.filter(u => !u.isBanned).length.toLocaleString(),
+                active: activeNow.toLocaleString(),
+                activeGrowth,
                 suspended: combinedList.filter(u => u.isBanned).length.toLocaleString()
             });
         } catch (error) {
@@ -345,8 +355,8 @@ const AdminUsersPage = () => {
             {/* Stats Cards Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-4">
                 {[
-                    { label: 'Total Users', value: stats.total, icon: <Users className="w-6 h-6 text-blue-600" />, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100/50', change: '+12%' },
-                    { label: 'Active Accounts', value: stats.active, icon: <Users className="w-6 h-6 text-emerald-500" />, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100/50', change: '+5%' },
+                    { label: 'Total Users', value: stats.total, icon: <Users className="w-6 h-6 text-blue-600" />, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100/50', change: stats.totalGrowth !== 0 ? `${stats.totalGrowth > 0 ? '+' : ''}${stats.totalGrowth}%` : null },
+                    { label: 'Active Accounts', value: stats.active, icon: <Users className="w-6 h-6 text-emerald-500" />, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100/50', change: stats.activeGrowth !== 0 ? `${stats.activeGrowth > 0 ? '+' : ''}${stats.activeGrowth}%` : null },
                     { label: 'Suspended', value: stats.suspended, icon: <UserX className="w-6 h-6 text-red-500" />, bgColor: 'bg-red-50/50', borderColor: 'border-red-100/50' },
                     { label: 'Administrators', value: stats.admins, icon: <Shield className="w-6 h-6 text-purple-500" />, bgColor: 'bg-purple-50/50', borderColor: 'border-purple-100/50' },
                 ].map((stat, i) => (
@@ -355,7 +365,7 @@ const AdminUsersPage = () => {
                             <div className={`p-3 rounded-xl ${stat.bgColor} border ${stat.borderColor}`}>
                                 {stat.icon}
                             </div>
-                            {stat.change && <span className="text-emerald-500 text-xs font-black">{stat.change}</span>}
+                            {stat.change && <span className={`text-xs font-black ${stat.change.startsWith('-') ? 'text-red-500' : 'text-emerald-500'}`}>{stat.change}</span>}
                             {stat.badge && <span className="text-red-500 text-[10px] font-black uppercase tracking-wider">{stat.badge}</span>}
                         </div>
                         <p className="text-slate-500 text-[13px] font-bold mb-1">{stat.label}</p>

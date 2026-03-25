@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { doc, setDoc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
     Package, IndianRupee, Image as ImageIcon, Tag, Info, Check,
-    X, Plus, Trash2, Globe, Shield
+    X, Plus, Trash2, Globe, Shield, Upload, Loader2
 } from "lucide-react";
 import { Button, Card, Input, Alert, Badge } from "../../components/ui";
 import { toast } from "react-toastify";
 import { formatCurrency } from "../../utils/formatUtils";
+import { uploadToCloudinary } from "../../utils/cloudinaryUpload";
 
 /**
  * Enhanced Add Product Page with Modern UI
@@ -48,6 +49,22 @@ const AdminAddProductPage = () => {
     const [specKey, setSpecKey] = useState("");
     const [specValue, setSpecValue] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadingImages, setUploadingImages] = useState({});
+    const fileInputRefs = useRef({});
+
+    const handleImageUpload = async (imgKey, file) => {
+        if (!file) return;
+        setUploadingImages(prev => ({ ...prev, [imgKey]: true }));
+        try {
+            const url = await uploadToCloudinary(file);
+            setNewProduct(prev => ({ ...prev, [imgKey]: url }));
+            toast.success('Image uploaded successfully!');
+        } catch (err) {
+            toast.error(err.message || 'Failed to upload image');
+        } finally {
+            setUploadingImages(prev => ({ ...prev, [imgKey]: false }));
+        }
+    };
     const [slugAvailability, setSlugAvailability] = useState({ checked: false, available: false });
     const [errors, setErrors] = useState({});
     // Dynamic brands and categories
@@ -385,26 +402,6 @@ const AdminAddProductPage = () => {
                                 required
                             />
 
-                            <Input
-                                label="Rating (0.0 - 5.0)"
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max="5"
-                                placeholder="e.g., 4.5"
-                                value={newProduct.rating}
-                                onChange={(e) => setNewProduct({ ...newProduct, rating: e.target.value })}
-                            />
-
-                            <Input
-                                label="Review Count"
-                                type="number"
-                                min="0"
-                                placeholder="e.g., 25"
-                                value={newProduct.reviews}
-                                onChange={(e) => setNewProduct({ ...newProduct, reviews: e.target.value })}
-                            />
-
                             <div className="col-span-1 md:col-span-2">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     Product Description <span className="text-red-500">*</span>
@@ -565,12 +562,40 @@ const AdminAddProductPage = () => {
                                     </label>
                                     <Input
                                         type="url"
-                                        placeholder="Image URL"
+                                        placeholder="Paste image URL"
                                         value={newProduct[imgKey]}
                                         onChange={(e) => setNewProduct({ ...newProduct, [imgKey]: e.target.value })}
                                         error={index === 0 ? errors.image : undefined}
                                         className="mb-0"
                                     />
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        ref={el => fileInputRefs.current[imgKey] = el}
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            handleImageUpload(imgKey, e.target.files[0]);
+                                            e.target.value = '';
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRefs.current[imgKey]?.click()}
+                                        disabled={uploadingImages[imgKey]}
+                                        className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-gray-300 text-sm font-medium text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {uploadingImages[imgKey] ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Uploading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-4 h-4" />
+                                                Upload from Device
+                                            </>
+                                        )}
+                                    </button>
                                     {newProduct[imgKey] && (
                                         <motion.div
                                             initial={{ opacity: 0, scale: 0.9 }}

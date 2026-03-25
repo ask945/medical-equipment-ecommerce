@@ -1,32 +1,43 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Calendar, User, Clock, ArrowLeft, Share2, MessageCircle, ChevronRight, BookOpen } from 'lucide-react';
-import { getBlogById, getBlogs } from '../services/blogService';
+import { Calendar, User, Clock, ArrowLeft, Share2, ChevronRight, BookOpen, Eye, MessageSquare } from 'lucide-react';
+import { getBlogById, incrementBlogViews, addBlogComment } from '../services/blogService';
+import { useData } from '../context/DataContext';
 import Button from '../components/Button';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 
 const BlogDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { blogs: allBlogs } = useData();
   const [blog, setBlog] = useState(null);
-  const [recentBlogs, setRecentBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const { user } = useAuth();
+
+  const recentBlogs = allBlogs.filter(b => b.id !== id).slice(0, 3);
 
   useEffect(() => {
     const fetchBlog = async () => {
       window.scrollTo(0, 0);
       const data = await getBlogById(id);
-      if (!data) {
+      if (!data || data.isActive === false) {
         navigate('/blog');
         return;
       }
       setBlog(data);
-      
-      const allBlogs = await getBlogs();
-      setRecentBlogs(allBlogs.filter(b => b.id !== id).slice(0, 3));
       setLoading(false);
+
+      // Unique view tracking
+      const deviceId = localStorage.getItem('deviceId') || `dev_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('deviceId', deviceId);
+      const identifier = user ? user.uid : deviceId;
+      await incrementBlogViews(id, identifier);
     };
     fetchBlog();
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   if (loading) {
     return (
@@ -64,11 +75,14 @@ const BlogDetailPage = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all shadow-sm">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success('Link copied to clipboard!');
+                }}
+                className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all shadow-sm"
+              >
                 <Share2 size={18} />
-              </button>
-              <button className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all shadow-sm">
-                <MessageCircle size={18} />
               </button>
             </div>
           </div>
@@ -90,14 +104,114 @@ const BlogDetailPage = () => {
               />
             </article>
 
-            {/* Tags/Keywords */}
-            <div className="mt-12 pt-8 border-t border-border flex flex-wrap gap-2">
-              <span className="text-sm font-bold text-text-primary mr-2 self-center">Tags:</span>
-              {['Health', 'Medical', 'Care', 'Wellness'].map(tag => (
-                <span key={tag} className="bg-gray-100 text-text-secondary px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-primary hover:text-white transition-colors cursor-pointer">
-                  #{tag}
-                </span>
-              ))}
+            {blog.tags && blog.tags.length > 0 && (
+              <div className="mt-12 pt-8 border-t border-slate-50 flex flex-wrap gap-2">
+                <span className="text-sm font-black text-slate-900 mr-2 self-center uppercase tracking-wider">Tags:</span>
+                {blog.tags.map(tag => (
+                  <span key={tag} className="bg-slate-50 text-slate-500 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-tighter hover:bg-blue-600 hover:text-white transition-all cursor-pointer border border-slate-100">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Engagement Stats Bar */}
+        <div className="mt-8 flex items-center justify-center gap-12 py-4 border-y border-slate-100">
+            <div className="flex items-center gap-2 group">
+              <Eye className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+              <span className="text-sm font-black text-slate-900">{blog.views || 0} <span className="text-slate-400 font-bold uppercase text-[10px] ml-1">Views</span></span>
+            </div>
+            <div className="flex items-center gap-2 group">
+              <MessageSquare className="w-5 h-5 text-slate-300 group-hover:text-amber-500 transition-colors" />
+              <span className="text-sm font-black text-slate-900">{blog.comments?.length || 0} <span className="text-slate-400 font-bold uppercase text-[10px] ml-1">Comments</span></span>
+            </div>
+        </div>
+
+        {/* Comment Section */}
+        <div className="mt-12 space-y-10" id="comments">
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight">Post Engagement</h3>
+            <div className="h-1 flex-1 bg-slate-50 mx-6 rounded-full" />
+          </div>
+
+          <div className="grid gap-10">
+            {/* Comment Form */}
+            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Leave a Comment</h4>
+                {user ? (
+                  <div className="space-y-4">
+                    <textarea 
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="Share your thoughts on this educational piece..."
+                      className="w-full h-32 p-5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 font-medium text-sm resize-none transition-all"
+                    />
+                    <div className="flex items-center justify-between">
+                       <p className="text-[11px] text-slate-400 font-medium italic">Posting as <span className="text-blue-600 font-black">{user.name}</span></p>
+                       <Button 
+                         variant="primary" 
+                         loading={submittingComment}
+                         onClick={async () => {
+                           if (!commentText.trim()) return toast.error("Write something first!");
+                           setSubmittingComment(true);
+                           try {
+                             await addBlogComment(id, {
+                               userId: user.uid,
+                               userName: user.name,
+                               message: commentText,
+                               avatar: user.avatar
+                             });
+                             setCommentText('');
+                             // Refresh local state
+                             const updated = await getBlogById(id);
+                             setBlog(updated);
+                             toast.success("Comment added!");
+                           } catch (err) {
+                             toast.error("Failed to post comment");
+                           } finally {
+                             setSubmittingComment(false);
+                           }
+                         }}
+                        >
+                         Post Comment
+                       </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    <p className="text-slate-400 text-sm font-medium mb-4">Join our community to participate in health discussions.</p>
+                    <Button variant="primary" onClick={() => navigate('/signin')}>Sign In to Comment</Button>
+                  </div>
+                )}
+            </div>
+
+            {/* Comment List */}
+            <div className="space-y-6">
+              {blog.comments && blog.comments.length > 0 ? (
+                blog.comments.map((comment, i) => (
+                  <div key={i} className="flex gap-4 p-6 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex-shrink-0 border border-slate-100 overflow-hidden">
+                       <img src={comment.avatar || `https://i.pravatar.cc/100?u=${comment.userId}`} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                       <div className="flex items-center justify-between mb-1">
+                          <h5 className="text-[13px] font-black text-slate-900">{comment.userName}</h5>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                            {new Date(comment.commentedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          </span>
+                       </div>
+                       <p className="text-[14px] text-slate-500 font-medium leading-relaxed">{comment.message}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 opacity-30">
+                   <MessageSquare className="w-12 h-12 mx-auto mb-4" />
+                   <p className="font-black uppercase text-xs tracking-widest">No comments yet. Start the conversation!</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

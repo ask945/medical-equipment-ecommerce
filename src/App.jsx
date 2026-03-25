@@ -26,14 +26,20 @@ import AdminEditProductPage from './pages/admin/AdminEditProductPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminBrandsPage from './pages/admin/AdminBrandsPage';
 import AdminCategoriesPage from './pages/admin/AdminCategoriesPage';
+import AdminCategoryReportPage from './pages/admin/AdminCategoryReportPage';
 import AdminCouponsPage from './pages/admin/AdminCouponsPage';
 import AdminBannersPage from './pages/admin/AdminBannersPage';
 import AdminAnnouncementsPage from './pages/admin/AdminAnnouncementsPage';
 import AdminOrderDetailPage from './pages/admin/AdminOrderDetailPage';
+import AdminInquiriesPage from './pages/admin/AdminInquiriesPage';
+import AdminQuotesPage from './pages/admin/AdminQuotesPage';
 import WhatsAppButton from './components/WhatsAppButton';
 import BlogPage from './pages/BlogPage';
 import BlogDetailPage from './pages/BlogDetailPage';
+import AdminBlogsPage from './pages/admin/AdminBlogsPage';
+import AdminBlogDetailEditor from './pages/admin/AdminBlogDetailEditor';
 import ServicesPage from './pages/ServicesPage';
+import { DataProvider } from './context/DataContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -47,6 +53,10 @@ const dashboardRoutes = [
   '/admin/brands',
   '/admin/categories',
   '/admin/coupons',
+  '/admin/inquiries',
+  '/admin/quotes',
+  '/admin/blog',
+  '/admin/blog/add',
   // '/admin/banners',
   // '/admin/announcements'
 ];
@@ -62,6 +72,7 @@ function AppLayout() {
   // Check if current path is a sub-route of admin sections that have dynamic IDs
   const isDashboard = dashboardRoutes.some(path => location.pathname === path) ||
     location.pathname.startsWith('/admin/products/edit/') ||
+    location.pathname.startsWith('/admin/blog/edit/') ||
     location.pathname.startsWith('/admin/orders/');
 
   return (
@@ -96,7 +107,13 @@ function AppLayout() {
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="brands" element={<AdminBrandsPage />} />
             <Route path="categories" element={<AdminCategoriesPage />} />
+            <Route path="categories/report" element={<AdminCategoryReportPage />} />
             <Route path="coupons" element={<AdminCouponsPage />} />
+            <Route path="inquiries" element={<AdminInquiriesPage />} />
+            <Route path="quotes" element={<AdminQuotesPage />} />
+            <Route path="blog" element={<AdminBlogsPage />} />
+            <Route path="blog/add" element={<AdminBlogDetailEditor />} />
+            <Route path="blog/edit/:id" element={<AdminBlogDetailEditor />} />
             {/* <Route path="banners" element={<AdminBannersPage />} /> */}
             {/* <Route path="announcements" element={<AdminAnnouncementsPage />} /> */}
           </Route>
@@ -104,7 +121,14 @@ function AppLayout() {
       </main>
       {!isDashboard && <Footer />}
       {!isDashboard && <WhatsAppButton />}
-      <ToastContainer position="bottom-right" />
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        closeOnClick
+        draggable
+        pauseOnHover
+        pauseOnFocusLoss={false}
+      />
     </div>
   );
 }
@@ -113,11 +137,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <WishlistProvider>
-          <CartProvider>
-            <AppLayout />
-          </CartProvider>
-        </WishlistProvider>
+        <DataProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <AppLayout />
+            </CartProvider>
+          </WishlistProvider>
+        </DataProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Button from './Button';
 import { navLinks } from '../data/mockData';
-import { getCategories } from '../services/categoryService';
+import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
@@ -23,12 +23,13 @@ export function PublicHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [categories, setCategories] = useState([
+  const { categories: dataCategories } = useData();
+  const categories = dataCategories.length > 0 ? dataCategories : [
     { id: 'cat1', name: 'Medicines', label: 'Medicines' },
     { id: 'cat2', name: 'Diagnostics', label: 'Diagnostics' },
     { id: 'cat3', name: 'First Aid', label: 'First Aid' },
     { id: 'cat4', name: 'Personal Care', label: 'Personal Care' }
-  ]);
+  ];
   const dropdownRef = useRef(null);
   const userMenuRef = useRef(null);
   const location = useLocation();
@@ -37,14 +38,6 @@ export function PublicHeader() {
   const { items: wishlistItems } = useWishlist();
   const { cartCount } = useCart();
   const wishlistCount = wishlistItems?.length || 0;
-
-  useEffect(() => {
-    getCategories()
-      .then(cats => {
-        if (cats && cats.length > 0) setCategories(cats);
-      })
-      .catch((err) => console.error('Error fetching categories:', err));
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {

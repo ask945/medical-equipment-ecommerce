@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Minus, Plus, Trash2, Tag, ArrowRight, ShoppingBag, Package } from 'lucide-react';
+import { Minus, Plus, Trash2, ArrowRight, ShoppingBag, Package } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import Button from '../components/Button';
 import { useCart } from '../context/CartContext';
@@ -8,10 +8,14 @@ import { formatCurrency } from '../utils/formatUtils';
 
 export default function CartPage() {
   const { cartItems: items, updateQuantity: contextUpdateQty, removeFromCart, subtotal, loading } = useCart();
-  const [promoCode, setPromoCode] = useState('');
 
   const updateQuantity = (id, delta) => {
-    contextUpdateQty(id, (current) => Math.max(1, current + delta));
+    const item = items.find(i => i.id === id);
+    if (item && item.quantity + delta < 1) {
+      removeFromCart(id);
+    } else {
+      contextUpdateQty(id, (current) => Math.max(1, current + delta));
+    }
   };
 
   const removeItem = (id) => {
@@ -150,24 +154,6 @@ export default function CartPage() {
               </div>
             </div>
 
-            {/* Promo Code */}
-            <div className="mt-5 pt-5 border-t border-border">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    placeholder="Promo code"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  />
-                </div>
-                <Button variant="secondary" size="sm">
-                  Apply
-                </Button>
-              </div>
-            </div>
 
             <div className="mt-5 pt-5 border-t border-border">
               <div className="flex justify-between mb-5">

@@ -1,23 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Calendar, User, Clock, ArrowRight, BookOpen } from 'lucide-react';
-import { getBlogs } from '../services/blogService';
+import { useData } from '../context/DataContext';
 import Button from '../components/Button';
 
 const BlogPage = () => {
-  const [blogs, setBlogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { blogs, blogsLoading: loading } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-
-  useEffect(() => {
-    const fetchBlogs = async () => {
-      const data = await getBlogs();
-      setBlogs(data);
-      setLoading(false);
-    };
-    fetchBlogs();
-  }, []);
 
   const categories = ['All', ...new Set(blogs.map(blog => blog.category))];
 

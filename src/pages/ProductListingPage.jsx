@@ -1,18 +1,16 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import FilterSidebar from '../components/FilterSidebar';
 import ProductCard from '../components/ProductCard';
-import { getProducts } from '../services/productService';
-import { getCategories } from '../services/categoryService';
+import { useData } from '../context/DataContext';
 
 const PRODUCTS_PER_PAGE = 6;
 
 export default function ProductListingPage() {
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { products, categories, productsLoading, categoriesLoading } = useData();
+  const loading = productsLoading || categoriesLoading;
   const [sortBy, setSortBy] = useState('featured');
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -25,21 +23,6 @@ export default function ProductListingPage() {
     brands: [],
     minRating: 0,
   });
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [data, cats] = await Promise.all([getProducts(), getCategories()]);
-        setProducts(data);
-        setCategories(cats);
-      } catch (err) {
-        console.error('Error fetching products:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
 
   const filteredProducts = useMemo(() => {
     let result = products;
@@ -73,7 +56,7 @@ export default function ProductListingPage() {
     }
 
     if (sidebarFilters.minRating > 0) {
-      result = result.filter((p) => p.rating >= sidebarFilters.minRating);
+      result = result.filter((p) => Number(p.rating) > 0 && Number(p.rating) >= sidebarFilters.minRating);
     }
 
     // Sorting
@@ -83,8 +66,14 @@ export default function ProductListingPage() {
           return a.price - b.price;
         case 'price-desc':
           return b.price - a.price;
-        case 'rating':
-          return (Number(b.rating) || 0) - (Number(a.rating) || 0);
+        case 'rating': {
+          const aR = Number(a.rating) || 0;
+          const bR = Number(b.rating) || 0;
+          // Unrated products go last
+          if (aR === 0 && bR > 0) return 1;
+          if (bR === 0 && aR > 0) return -1;
+          return bR - aR;
+        }
         case 'newest':
           return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0) || b.id.localeCompare(a.id);
         case 'featured':

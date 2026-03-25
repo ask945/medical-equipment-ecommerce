@@ -1,28 +1,37 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, getDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { db } from "../../firebase";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
     Plus, Edit, Trash2,
     ChevronRight, LayoutGrid, ListTree,
     Building2, FolderTree, Info,
     GripVertical, Download,
-    Activity, Stethoscope, CheckCircle2
+    Activity, Stethoscope, CheckCircle2,
+    Eye, ChevronDown
 } from "lucide-react";
-import { Card, Button, Input, LoadingSpinner, Modal, Badge } from "../../components/ui";
+import { Card, Button, Input, LoadingSpinner, Modal, Badge, ConfirmDialog } from "../../components/ui";
 import { toast } from "react-toastify";
+import { exportToCSV } from "../../utils/csvUtils";
+import { getCategories } from "../../services/categoryService";
+import { useNavigate } from "react-router-dom";
 
 /**
  * Admin Brands Management Page
  */
 const AdminBrandsPage = () => {
+    const navigate = useNavigate();
     const [brands, setBrands] = useState([]);
     const [filteredBrands, setFilteredBrands] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeTab, setActiveTab] = useState("brands");
-    const [categories, setCategories] = useState([]);
+    const [categories, setCategories] = useState([]); // categories shown in hierarchy tree
     const [categoriesLoading, setCategoriesLoading] = useState(true);
+    const [hierarchyIds, setHierarchyIds] = useState(null); // null = not loaded yet
+    const [expandedBrandId, setExpandedBrandId] = useState(null);
+
+    const [confirmDelete, setConfirmDelete] = useState(null);
 
     // Modal States
     const [modalOpen, setModalOpen] = useState(false);
@@ -30,6 +39,12 @@ const AdminBrandsPage = () => {
     const [label, setLabel] = useState("");
     const [docID, setDocID] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+
+    // Root category dropdown
+    const [categorySearchTerm, setCategorySearchTerm] = useState("");
+    const [productCategories, setProductCategories] = useState([]);
+    // Category delete confirm modal
+    const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState(null);
 
     useEffect(() => {
         fetchBrands();
@@ -47,36 +62,47 @@ const AdminBrandsPage = () => {
     const fetchBrands = async () => {
         setLoading(true);
         try {
-            // Fetch brands
             const snapshot = await getDocs(collection(db, "brands"));
             const brandsList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
-                docID: doc.id // Ensure docID is consistent
+                docID: doc.id
             }));
 
-            // Fetch products to count occurrences
             const productsSnapshot = await getDocs(collection(db, "products"));
             const productCounts = {};
+            const uniqueCategories = new Set();
             productsSnapshot.docs.forEach(doc => {
                 const product = doc.data();
                 if (product.brand) {
                     const rawBrand = product.brand.toLowerCase().trim();
                     const brandSlug = rawBrand.replace(/\s+/g, '-');
-                    
                     productCounts[brandSlug] = (productCounts[brandSlug] || 0) + 1;
                     productCounts[rawBrand] = (productCounts[rawBrand] || 0) + 1;
                 }
+                if (product.category) {
+                    uniqueCategories.add(product.category.trim());
+                }
             });
 
-            // Map counts to brands
+            // Fetch categories from Firestore categories collection
+            try {
+                const firestoreCategories = await getCategories();
+                const catNames = firestoreCategories
+                    .filter(c => c.name || c.label)
+                    .map(c => c.name || c.label);
+                // Merge Firestore categories with product-derived ones (Firestore takes priority)
+                const mergedSet = new Set([...catNames, ...uniqueCategories]);
+                setProductCategories([...mergedSet].sort());
+            } catch {
+                setProductCategories([...uniqueCategories].sort());
+            }
+
             const brandsWithCounts = brandsList.map(brand => {
                 const docIdKey = (brand.docID || '').toLowerCase().trim();
                 const labelKey = (brand.label || '').toLowerCase().trim();
-                
                 const countBySlug = productCounts[docIdKey] || 0;
                 const countByLabel = productCounts[labelKey] || 0;
-
                 return {
                     ...brand,
                     productCount: Math.max(countBySlug, countByLabel)
@@ -95,12 +121,25 @@ const AdminBrandsPage = () => {
     const fetchCategories = async () => {
         setCategoriesLoading(true);
         try {
+            // Fetch ALL categories from Firestore
             const snapshot = await getDocs(collection(db, "categories"));
-            const list = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setCategories(list);
+            const allCats = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            // Fetch the hierarchy doc to know which categories to show in tree
+            const hierRef = doc(db, "settings", "categoryHierarchy");
+            const hierSnap = await getDoc(hierRef);
+            let visibleIds;
+
+            if (hierSnap.exists() && hierSnap.data().visibleCategories) {
+                visibleIds = hierSnap.data().visibleCategories;
+                setHierarchyIds(visibleIds);
+                setCategories(allCats.filter(c => visibleIds.includes(c.id)));
+            } else {
+                // No hierarchy doc yet — start empty, admin adds manually
+                setHierarchyIds([]);
+                setCategories([]);
+                await setDoc(hierRef, { visibleCategories: [] }, { merge: true });
+            }
         } catch (err) {
             console.error("Error fetching categories:", err);
         } finally {
@@ -121,12 +160,10 @@ const AdminBrandsPage = () => {
             };
 
             if (editBrand) {
-                // Update existing brand
                 const brandRef = doc(db, "brands", editBrand.id);
                 await updateDoc(brandRef, brandData);
                 toast.success("Brand updated successfully");
             } else {
-                // Add new brand
                 const brandRef = doc(db, "brands", brandData.docID);
                 await setDoc(brandRef, {
                     ...brandData,
@@ -149,17 +186,82 @@ const AdminBrandsPage = () => {
     };
 
     const handleDeleteBrand = async (brand) => {
-        if (!window.confirm(`Are you sure you want to delete the brand "${brand.label}"?`)) {
-            return;
-        }
-
         try {
             await deleteDoc(doc(db, "brands", brand.id));
             toast.success("Brand deleted successfully");
+            setExpandedBrandId(null);
             fetchBrands();
         } catch (error) {
             console.error("Error deleting brand:", error);
             toast.error("Failed to delete brand");
+        }
+    };
+
+    const handleExport = () => {
+        if (!brands || brands.length === 0) {
+            toast.warn("No brands to export");
+            return;
+        }
+
+        const headers = [
+            { key: 'label', label: 'Brand Name' },
+            { key: 'docID', label: 'Brand Slug' },
+            { key: 'productCount', label: 'Product Count' }
+        ];
+
+        exportToCSV(brands, `Brands_Export_${new Date().toISOString().split('T')[0]}.csv`, headers);
+        toast.success("Brands exported to CSV");
+    };
+
+    // Get categories not already displayed (for the "Add Root Category" dropdown)
+    const availableCategories = (() => {
+        // All products' categories that exist but aren't in the categories collection
+        return [];
+    })();
+
+    const handleAddRootCategory = async (categoryLabel) => {
+        try {
+            // Find the matching category in Firestore — only existing categories allowed
+            const snapshot = await getDocs(collection(db, "categories"));
+            const match = snapshot.docs.find(d => {
+                const data = d.data();
+                return (data.name || data.label || '').toLowerCase() === categoryLabel.toLowerCase();
+            });
+
+            if (!match) {
+                toast.error("Category does not exist. Create it first in the Categories page.");
+                return;
+            }
+
+            // Add to hierarchy visibility list
+            const hierRef = doc(db, "settings", "categoryHierarchy");
+            await setDoc(hierRef, { visibleCategories: arrayUnion(match.id) }, { merge: true });
+
+            toast.success(`"${categoryLabel}" added to hierarchy`);
+            fetchCategories();
+        } catch (error) {
+            console.error("Error adding category:", error);
+            toast.error("Failed to add category");
+        }
+    };
+
+    const handleDeleteCategory = (cat) => {
+        setDeleteCategoryConfirm(cat);
+    };
+
+    const confirmDeleteCategory = async () => {
+        if (!deleteCategoryConfirm) return;
+        try {
+            // Only remove from hierarchy list, NOT the actual category
+            const hierRef = doc(db, "settings", "categoryHierarchy");
+            await updateDoc(hierRef, { visibleCategories: arrayRemove(deleteCategoryConfirm.id) });
+            toast.success(`"${deleteCategoryConfirm.label}" removed from hierarchy`);
+            setDeleteCategoryConfirm(null);
+            fetchCategories();
+        } catch (error) {
+            console.error("Error removing category from hierarchy:", error);
+            toast.error("Failed to remove from hierarchy");
+            setDeleteCategoryConfirm(null);
         }
     };
 
@@ -178,7 +280,6 @@ const AdminBrandsPage = () => {
         );
     }
 
-
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -192,20 +293,22 @@ const AdminBrandsPage = () => {
                     <p className="text-gray-500 font-medium">Organize and manage equipment brands and category hierarchies.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="border-gray-200 text-gray-700 font-bold bg-white h-11 px-6 shadow-sm">
+                    <Button variant="outline" onClick={handleExport} className="border-gray-200 text-gray-700 font-bold bg-white h-11 px-6 shadow-sm">
                         <Download className="w-4 h-4 mr-2" /> Export Data
                     </Button>
-                    <Button
-                        className="bg-blue-600 hover:bg-blue-700 font-bold shadow-lg shadow-blue-200 h-11 px-6 text-white"
-                        onClick={() => {
-                            setEditBrand(null);
-                            setLabel("");
-                            setDocID("");
-                            setModalOpen(true);
-                        }}
-                    >
-                        <Plus className="w-4 h-4 mr-2" /> New Entry
-                    </Button>
+                    {activeTab === 'brands' && (
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 font-bold shadow-lg shadow-blue-200 h-11 px-6 text-white"
+                            onClick={() => {
+                                setEditBrand(null);
+                                setLabel("");
+                                setDocID("");
+                                setModalOpen(true);
+                            }}
+                        >
+                            <Plus className="w-4 h-4 mr-2" /> Add Brand
+                        </Button>
+                    )}
                 </div>
             </header>
 
@@ -213,7 +316,7 @@ const AdminBrandsPage = () => {
             <nav className="flex items-center gap-8 mb-8 border-b border-gray-100">
                 <button
                     onClick={() => setActiveTab('brands')}
-                    className={`pb-4 text-sm font-bold transition-all relative flex items-center gap-2 
+                    className={`pb-4 text-sm font-bold transition-all relative flex items-center gap-2
                         ${activeTab === 'brands' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     <LayoutGrid className="w-4 h-4" /> Brands Management
@@ -223,7 +326,7 @@ const AdminBrandsPage = () => {
                 </button>
                 <button
                     onClick={() => setActiveTab('categories')}
-                    className={`pb-4 text-sm font-bold transition-all relative flex items-center gap-2 
+                    className={`pb-4 text-sm font-bold transition-all relative flex items-center gap-2
                         ${activeTab === 'categories' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     <FolderTree className="w-4 h-4" /> Category Hierarchy
@@ -233,31 +336,29 @@ const AdminBrandsPage = () => {
                 </button>
             </nav>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                {/* Left Column: Featured Brands */}
-                <div className="lg:col-span-4 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <CheckCircle2 className="w-5 h-5 text-blue-600" /> Featured Brands
-                        </h2>
-                        <button className="text-blue-600 text-[10px] font-black uppercase tracking-tighter hover:underline">Add Brand</button>
-                    </div>
+            {/* Brands Tab */}
+            {activeTab === 'brands' && (
+                <div className="space-y-3">
+                    {/* Search */}
+                    <Input
+                        placeholder="Search brands..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="max-w-sm mb-4"
+                    />
 
-                    <div className="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredBrands.map((brand) => (
                             <Card
                                 key={brand.id}
-                                className="p-4 border-gray-100 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/5 transition-all cursor-pointer group"
-                                onClick={() => {
-                                    setEditBrand(brand);
-                                    setLabel(brand.label);
-                                    setDocID(brand.docID);
-                                    setModalOpen(true);
-                                }}
+                                className={`p-4 border-gray-100 transition-all ${expandedBrandId === brand.id ? 'border-blue-200 shadow-lg shadow-blue-500/5' : 'hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/5'}`}
                             >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-lg flex items-center justify-center group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
-                                        <Building2 className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
+                                <div
+                                    className="flex items-center gap-4 cursor-pointer"
+                                    onClick={() => setExpandedBrandId(expandedBrandId === brand.id ? null : brand.id)}
+                                >
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${expandedBrandId === brand.id ? 'bg-blue-50 border-blue-100 border' : 'bg-gray-50 border border-gray-100'}`}>
+                                        <Building2 className={`w-5 h-5 ${expandedBrandId === brand.id ? 'text-blue-600' : 'text-gray-400'}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-bold text-gray-900 text-sm truncate">{brand.label}</h4>
@@ -265,22 +366,76 @@ const AdminBrandsPage = () => {
                                             {brand.productCount?.toLocaleString() || 0} Products
                                         </p>
                                     </div>
-                                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-600 transition-colors" />
+                                    <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform ${expandedBrandId === brand.id ? 'rotate-180 text-blue-600' : ''}`} />
                                 </div>
+
+                                {/* Expanded actions */}
+                                <AnimatePresence>
+                                    {expandedBrandId === brand.id && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1 text-xs font-bold"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditBrand(brand);
+                                                        setLabel(brand.label);
+                                                        setDocID(brand.docID);
+                                                        setModalOpen(true);
+                                                    }}
+                                                >
+                                                    <Edit className="w-3.5 h-3.5 mr-1.5" /> Edit Brand
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1 text-xs font-bold text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigate(`/admin/products?brand=${brand.docID}`);
+                                                    }}
+                                                >
+                                                    <Eye className="w-3.5 h-3.5 mr-1.5" /> View Products
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-xs font-bold text-red-500 border-red-200 hover:bg-red-50 px-3"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setConfirmDelete(brand);
+                                                    }}
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </Card>
                         ))}
                     </div>
+
+                    {filteredBrands.length === 0 && !loading && (
+                        <div className="text-center py-20 text-gray-400">
+                            <Building2 className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                            <p className="text-sm font-medium">No brands found</p>
+                        </div>
+                    )}
                 </div>
+            )}
 
-                {/* Right Column: Category Hierarchy */}
-                <div className="lg:col-span-8 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <ListTree className="w-5 h-5 text-blue-600" /> Category Hierarchy
-                        </h2>
-                        <button className="text-blue-600 text-[10px] font-black uppercase tracking-tighter hover:underline">Add Category</button>
-                    </div>
-
+            {/* Categories Tab */}
+            {activeTab === 'categories' && (
+                <div className="space-y-6">
                     <Card className="p-8 border-none shadow-xl bg-white/80 backdrop-blur-sm min-h-[400px] overflow-y-auto custom-scrollbar max-h-[calc(100vh-320px)]">
                         <div className="space-y-4">
                             {categoriesLoading ? (
@@ -299,21 +454,16 @@ const AdminBrandsPage = () => {
                                         <div className="flex-1">
                                             <h4 className="font-bold text-slate-900 text-[15px]">{cat.label}</h4>
                                         </div>
-                                        {cat.status === 'ACTIVE' || true && (
-                                            <div className="ml-auto">
-                                                <Badge className="!bg-[#2b64e3] !text-white !border-none py-1 px-3 text-[10px] font-bold rounded-full shadow-sm">
-                                                    ACTIVE
-                                                </Badge>
-                                            </div>
-                                        )}
-                                        <div className="flex gap-1.5 ml-4">
-                                            <button className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-slate-900 transition-colors">
-                                                <Edit className="w-4 h-4" />
-                                            </button>
-                                            <button className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-red-500 transition-colors">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                                        <Badge className="!bg-[#2b64e3] !text-white !border-none py-1 px-3 text-[10px] font-bold rounded-full shadow-sm">
+                                            ACTIVE
+                                        </Badge>
+                                        <button
+                                            onClick={() => handleDeleteCategory(cat)}
+                                            className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                                            title={`Remove ${cat.label}`}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 ))
                             ) : (
@@ -322,12 +472,42 @@ const AdminBrandsPage = () => {
                                 </div>
                             )}
 
-                            {/* Empty Root Adder */}
-                            <div className="mt-6 border-2 border-dashed border-slate-200 rounded-xl p-5 flex items-center justify-center gap-3 text-slate-400 hover:border-blue-200 hover:bg-blue-50/30 transition-all cursor-pointer group">
-                                <div className="bg-slate-300 group-hover:bg-[#2b64e3] text-white rounded p-1 transition-colors flex items-center justify-center">
-                                    <Plus className="w-4 h-4" />
+                            {/* Add Root Category - dropdown from Firestore categories */}
+                            <div className="mt-6">
+                                <label className="text-xs font-bold text-slate-500 mb-2 block">Add Root Category from Existing</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={categorySearchTerm}
+                                        onChange={(e) => setCategorySearchTerm(e.target.value)}
+                                        className="flex-1 px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                                    >
+                                        <option value="">Select a category...</option>
+                                        {(() => {
+                                            const existingCatIds = categories.map(c => c.id.toLowerCase());
+                                            const existingCatLabels = categories.map(c => c.label.toLowerCase());
+                                            return productCategories.filter(cat => {
+                                                const slug = cat.toLowerCase().replace(/\s+/g, '-');
+                                                const lower = cat.toLowerCase();
+                                                return !existingCatIds.includes(slug) && !existingCatLabels.includes(lower);
+                                            }).map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
+                                            ));
+                                        })()}
+                                    </select>
+                                    <button
+                                        onClick={() => {
+                                            if (categorySearchTerm) {
+                                                handleAddRootCategory(categorySearchTerm);
+                                                setCategorySearchTerm('');
+                                            } else {
+                                                toast.error('Please select a category first');
+                                            }
+                                        }}
+                                        className="px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add
+                                    </button>
                                 </div>
-                                <span className="text-sm font-bold text-slate-400 group-hover:text-blue-600 transition-colors">Drop or Add New Root Category</span>
                             </div>
                         </div>
                     </Card>
@@ -340,21 +520,19 @@ const AdminBrandsPage = () => {
                             </div>
                         </div>
                         <div className="flex-1">
-                            <h4 className="font-bold text-slate-900 text-[15px] leading-6">Pro Tip: Reordering</h4>
+                            <h4 className="font-bold text-slate-900 text-[15px] leading-6">Category Management</h4>
                             <p className="text-[13px] text-slate-600 leading-relaxed mt-1">
-                                You can drag and drop categories to reorder them or change their nesting level. Changes are saved automatically.
+                                Categories are used to organize products. Add categories from the suggested list above. Products are assigned categories when adding or editing them.
                             </p>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Site Footer */}
             <footer className="mt-20 pt-8 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">© 2024 MedEquip E-Commerce Admin</p>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">&copy; 2024 MedEquip E-Commerce Admin</p>
                 <div className="flex items-center gap-6">
-                    <button className="text-gray-400 hover:text-gray-900 text-[10px] font-black uppercase tracking-widest">System Logs</button>
-                    <button className="text-gray-400 hover:text-gray-900 text-[10px] font-black uppercase tracking-widest">Support</button>
                     <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                         <span className="text-[10px] text-green-600 font-black uppercase tracking-widest">System Live</span>
@@ -401,6 +579,42 @@ const AdminBrandsPage = () => {
                     </div>
                 </div>
             </Modal>
+
+            {/* Category Delete Confirm Modal */}
+            <Modal
+                isOpen={!!deleteCategoryConfirm}
+                onClose={() => setDeleteCategoryConfirm(null)}
+                title="Remove Category"
+                size="sm"
+            >
+                <div className="space-y-4 pt-2">
+                    <p className="text-sm text-gray-600">
+                        Are you sure you want to remove <span className="font-bold text-gray-900">"{deleteCategoryConfirm?.label}"</span> from the category hierarchy?
+                    </p>
+                    <p className="text-xs text-gray-400">This only removes it from the displayed tree. The category still exists and can be re-added.</p>
+                    <div className="flex gap-3 justify-end pt-4 border-t">
+                        <Button variant="outline" onClick={() => setDeleteCategoryConfirm(null)} className="font-bold">
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={confirmDeleteCategory}
+                            className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                        >
+                            Remove
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            <ConfirmDialog
+                isOpen={!!confirmDelete}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={() => handleDeleteBrand(confirmDelete)}
+                title="Delete Brand"
+                message={`Are you sure you want to delete the brand "${confirmDelete?.label}"?`}
+                confirmText="Delete"
+                variant="danger"
+            />
         </motion.div>
     );
 };

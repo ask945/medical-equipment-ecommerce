@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, Mail, Eye, EyeOff, Shield, Loader2, ArrowRight } from "lucide-react";
 import { Button, Input, Card, Alert } from "../../components/ui";
-import { useAuth } from "../../context/AuthContext";
 import { motion } from "framer-motion";
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -18,7 +17,6 @@ const AdminLoginPage = ({ onVerify }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const { signIn } = useAuth();
     const navigate = useNavigate();
 
     const handleAdminLogin = async (e) => {
@@ -33,88 +31,43 @@ const AdminLoginPage = ({ onVerify }) => {
             const querySnapshot = await getDocs(q);
 
             if (!querySnapshot.empty) {
-                // Valid admin found in the database. 
-                // CRITICAL: We MUST authenticate with Firebase Auth to get an access token for security rules.
-                const authRes = await signIn(email, password);
-                if (!authRes.success) {
-                     // The admin is in the DB but hasn't been registered in Firebase Auth yet. Do it now!
-                     const { createUserWithEmailAndPassword } = await import("firebase/auth");
-                     const { auth } = await import("../../firebase");
-                     try {
-                         await createUserWithEmailAndPassword(auth, email, password);
-                         console.log("Auto-created Firebase Auth account for existing DB admin.");
-                     } catch (err) {
-                         console.error("Could not create Firebase Auth account:", err);
-                     }
-                }
-                
-                sessionStorage.setItem("admin_verified", "true");
+                // Valid admin found — set session flags only, do NOT touch Firebase Auth
+                // This keeps the regular user's auth session intact
+                // admin_verified no longer stored — window flag used instead
                 sessionStorage.setItem("admin_email", email);
                 onVerify(true);
                 setLoading(false);
                 return;
-            } else {
-                // If not found in DB, provide a temporary emergency fallback just to prevent total lockout
-                // while the user sets up the database collection.
-                if (email === "admin@bluecare.com" && password === "admin789") {
-                    console.warn("Used emergency fallback. Auto-creating admin in database for future use.");
-                    
-                    // CRITICAL: We MUST authenticate with Firebase Auth to get a token, 
-                    // otherwise Firestore Security Rules will block all writes (like creating brands).
-                    const authRes = await signIn(email, password);
-                    if (!authRes.success) {
-                         // Real auth user doesn't exist yet, let's create it!
-                         const { createUserWithEmailAndPassword } = await import("firebase/auth");
-                         const { auth } = await import("../../firebase");
-                         try {
-                             await createUserWithEmailAndPassword(auth, email, password);
-                             console.log("Auto-created Firebase Auth account for fallback admin.");
-                         } catch (err) {
-                             console.error("Could not create Firebase Auth account, writes may fail:", err);
-                         }
-                    }
+            }
 
-                    try {
-                        await addDoc(adminsRef, {
-                            email: email,
-                            password: password,
-                            role: "Super Admin",
-                            createdAt: new Date()
-                        });
-                        toast.success("Admin credentials saved to database!");
-                    } catch (e) {
-                        console.error("Could not auto-create admin doc (check Firestore rules):", e);
-                    }
-
-                    sessionStorage.setItem("admin_verified", "true");
-                    sessionStorage.setItem("admin_email", email);
-                    onVerify(true);
-                    setLoading(false);
-                    return;
+            // Emergency fallback for first-time setup
+            if (email === "admin@bluecare.com" && password === "admin789") {
+                try {
+                    await addDoc(adminsRef, {
+                        email: email,
+                        password: password,
+                        role: "Super Admin",
+                        createdAt: new Date()
+                    });
+                    toast.success("Admin credentials saved to database!");
+                } catch (e) {
+                    console.error("Could not auto-create admin doc:", e);
                 }
 
-                setError("Invalid administrator credentials.");
+                // admin_verified no longer stored — window flag used instead
+                sessionStorage.setItem("admin_email", email);
+                onVerify(true);
+                setLoading(false);
+                return;
             }
+
+            setError("Invalid administrator credentials.");
         } catch (err) {
             console.error("Admin login error:", err);
 
-            // Fallback if rules completely block the read attempt before the collection exists
+            // Fallback if Firestore read is blocked
             if (email === "admin@bluecare.com" && password === "admin789") {
-                console.warn("Database blocked the request. Using emergency fallback.");
-                
-                // CRITICAL Auth registration
-                const authRes = await signIn(email, password);
-                if (!authRes.success) {
-                     const { createUserWithEmailAndPassword } = await import("firebase/auth");
-                     const { auth } = await import("../../firebase");
-                     try {
-                         await createUserWithEmailAndPassword(auth, email, password);
-                     } catch (err) {
-                         console.error("Could not create Firebase Auth account:", err);
-                     }
-                }
-
-                sessionStorage.setItem("admin_verified", "true");
+                // admin_verified no longer stored — window flag used instead
                 sessionStorage.setItem("admin_email", email);
                 onVerify(true);
                 setLoading(false);

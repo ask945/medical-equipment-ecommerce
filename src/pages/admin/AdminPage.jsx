@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { toast, ToastContainer } from "react-toastify";
+import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { collection, query, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "../../firebase";
 import { formatCurrency } from "../../utils/formatUtils";
 import {
     LayoutDashboard, Users, ShoppingBag, Layers, Image as ImageIcon,
-    Bell, ShoppingCart, Menu,
-    Search, Settings, UserPlus,
-    FileText, Ticket, Megaphone, ChevronDown, MoreHorizontal,
-    Banknote, ShieldCheck, Box
+    ShoppingCart, Menu, RefreshCw,
+    UserPlus,
+    FileText, Ticket, Megaphone,
+    Banknote, ShieldCheck, Box, Mail, BookOpen, Stethoscope
 } from "lucide-react";
 import { Card, LoadingSpinner, Badge } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
@@ -62,6 +62,7 @@ const StatCard = ({ title, value, icon: Icon, loading }) => {
  * Admin Dashboard Component
  */
 const AdminDashboard = () => {
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [orderStats, setOrderStats] = useState({
         totalOrders: 0,
@@ -77,6 +78,11 @@ const AdminDashboard = () => {
         totalUsers: 0,
         newUsersThisMonth: 0
     });
+    const [inquiryCount, setInquiryCount] = useState(0);
+    const [quoteCount, setQuoteCount] = useState(0);
+    const [chartPeriod, setChartPeriod] = useState('monthly');
+    const [topCategories, setTopCategories] = useState([]);
+    const [serviceRevenue, setServiceRevenue] = useState({ revenue: 0, orders: 0 });
 
     const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
     const STATUS_COLORS = {
@@ -94,10 +100,12 @@ const AdminDashboard = () => {
             try {
                 await Promise.all([
                     fetchOrderStatistics(),
-                    fetchMonthlyRevenue(),
+                    fetchMonthlyRevenue(chartPeriod),
                     fetchProductPerformance(),
                     fetchOrderStatusDistribution(),
-                    fetchUserStatistics()
+                    fetchUserStatistics(),
+                    fetchMessageStatistics(),
+                    fetchTopCategories()
                 ]);
             } catch (error) {
                 console.error("Critical error loading dashboard:", error);
@@ -163,55 +171,66 @@ const AdminDashboard = () => {
         }
     };
 
-    const fetchMonthlyRevenue = async () => {
+    const fetchMonthlyRevenue = async (period = 'monthly') => {
         try {
             const now = new Date();
-            const sixMonthsAgo = new Date();
-            sixMonthsAgo.setMonth(now.getMonth() - 6);
-
             const ordersRef = collection(db, "orders");
             const ordersSnapshot = await getDocs(ordersRef);
 
-            const monthlyData = {};
-
-            for (let i = 0; i < 6; i++) {
-                const month = new Date();
-                month.setMonth(now.getMonth() - i);
-                const monthKey = `${month.getFullYear()}-${month.getMonth() + 1}`;
-                const monthName = month.toLocaleString('default', { month: 'short' });
-                monthlyData[monthKey] = { month: monthName, year: month.getFullYear(), revenue: 0, orders: 0 };
-            }
-
-            ordersSnapshot.docs.forEach(doc => {
-                const data = doc.data();
-                const rawDate = data.orderDate || data.createdAt || data.date;
-                let orderDate = null;
-                if (rawDate?.toDate) {
-                    orderDate = rawDate.toDate();
-                } else if (rawDate) {
-                    orderDate = new Date(rawDate);
+            if (period === 'yearly') {
+                // Last 5 years
+                const yearlyData = {};
+                for (let i = 0; i < 5; i++) {
+                    const year = now.getFullYear() - i;
+                    yearlyData[year] = { month: String(year), year, revenue: 0, orders: 0 };
                 }
 
-                if (orderDate && orderDate >= sixMonthsAgo) {
-                    const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
-                    const orderTotal = data.total || data.totalAmount || data.amount || data.netAmount || 0;
-
-                    if (monthlyData[monthKey]) {
-                        monthlyData[monthKey].revenue += orderTotal;
-                        monthlyData[monthKey].orders += 1;
+                ordersSnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const rawDate = data.orderDate || data.createdAt || data.date;
+                    let orderDate = rawDate?.toDate ? rawDate.toDate() : rawDate ? new Date(rawDate) : null;
+                    if (orderDate && yearlyData[orderDate.getFullYear()]) {
+                        const orderTotal = data.total || data.totalAmount || data.amount || data.netAmount || 0;
+                        yearlyData[orderDate.getFullYear()].revenue += orderTotal;
+                        yearlyData[orderDate.getFullYear()].orders += 1;
                     }
+                });
+
+                setMonthlyRevenue(Object.values(yearlyData).sort((a, b) => a.year - b.year));
+            } else {
+                // Last 5 months
+                const fiveMonthsAgo = new Date();
+                fiveMonthsAgo.setMonth(now.getMonth() - 5);
+                fiveMonthsAgo.setDate(1);
+
+                const monthlyData = {};
+                for (let i = 0; i < 5; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const monthKey = `${d.getFullYear()}-${d.getMonth() + 1}`;
+                    monthlyData[monthKey] = { month: d.toLocaleString('default', { month: 'short' }), year: d.getFullYear(), revenue: 0, orders: 0 };
                 }
-            });
 
-            const monthlyArray = Object.values(monthlyData).sort((a, b) => {
-                return a.year === b.year
-                    ? new Date(0, a.month, 0) - new Date(0, b.month, 0)
-                    : a.year - b.year;
-            });
+                ordersSnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const rawDate = data.orderDate || data.createdAt || data.date;
+                    let orderDate = rawDate?.toDate ? rawDate.toDate() : rawDate ? new Date(rawDate) : null;
+                    if (orderDate && orderDate >= fiveMonthsAgo) {
+                        const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
+                        const orderTotal = data.total || data.totalAmount || data.amount || data.netAmount || 0;
+                        if (monthlyData[monthKey]) {
+                            monthlyData[monthKey].revenue += orderTotal;
+                            monthlyData[monthKey].orders += 1;
+                        }
+                    }
+                });
 
-            setMonthlyRevenue(monthlyArray);
+                const monthlyArray = Object.values(monthlyData).sort((a, b) =>
+                    a.year === b.year ? new Date(2000, new Date(`${a.month} 1`).getMonth()) - new Date(2000, new Date(`${b.month} 1`).getMonth()) : a.year - b.year
+                );
+                setMonthlyRevenue(monthlyArray);
+            }
         } catch (error) {
-            console.error("Error fetching monthly revenue:", error);
+            console.error("Error fetching revenue data:", error);
         }
     };
 
@@ -311,6 +330,85 @@ const AdminDashboard = () => {
         }
     };
 
+    const fetchMessageStatistics = async () => {
+        try {
+            const [inqSnap, quoteSnap] = await Promise.all([
+                getDocs(collection(db, "inquiries")),
+                getDocs(collection(db, "quotes"))
+            ]);
+            setInquiryCount(inqSnap.docs.filter(d => d.data().status === 'pending').length);
+            setQuoteCount(quoteSnap.docs.filter(d => d.data().status === 'pending').length);
+        } catch (error) {
+            if (error.code === 'permission-denied') {
+                console.warn("Firebase: Missing permissions for inquiries or quotes collections. Review security rules.");
+            } else {
+                console.error("Message stats failed:", error);
+            }
+        }
+    };
+
+    const fetchTopCategories = async () => {
+        try {
+            // Fetch category labels to map slugs → display names
+            const catSnapshot = await getDocs(collection(db, "categories"));
+            const categoryLabels = {};
+            catSnapshot.docs.forEach(d => {
+                const data = d.data();
+                categoryLabels[d.id] = data.label || d.id;
+                if (data.docID) categoryLabels[data.docID] = data.label || data.docID;
+            });
+
+            const ordersRef = collection(db, "orders");
+            const ordersSnapshot = await getDocs(ordersRef);
+            const categoryData = {};
+            let totalRevenue = 0;
+            let svcRevenue = 0;
+            let svcOrders = 0;
+
+            ordersSnapshot.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.items && Array.isArray(data.items)) {
+                    data.items.forEach(item => {
+                        const rawCat = item.category;
+                        if (!rawCat) return;
+                        const rev = (item.price || 0) * (item.quantity || item.qty || 1);
+
+                        // Separate Services from product categories
+                        if (rawCat === 'Services' || String(item.id || '').startsWith('service-')) {
+                            svcRevenue += rev;
+                            svcOrders += 1;
+                            return;
+                        }
+
+                        const displayName = categoryLabels[rawCat] || rawCat;
+                        totalRevenue += rev;
+                        if (!categoryData[displayName]) {
+                            categoryData[displayName] = { name: displayName, revenue: 0, orders: 0 };
+                        }
+                        categoryData[displayName].revenue += rev;
+                        categoryData[displayName].orders += 1;
+                    });
+                }
+            });
+
+            setServiceRevenue({ revenue: svcRevenue, orders: svcOrders });
+
+            const colors = ['bg-blue-600', 'bg-blue-500', 'bg-blue-400', 'bg-blue-300', 'bg-blue-200'];
+            const sorted = Object.values(categoryData)
+                .sort((a, b) => b.revenue - a.revenue)
+                .slice(0, 5)
+                .map((cat, i) => ({
+                    ...cat,
+                    percentage: totalRevenue > 0 ? Math.round((cat.revenue / totalRevenue) * 100) : 0,
+                    color: colors[i] || 'bg-gray-300',
+                }));
+
+            setTopCategories(sorted);
+        } catch (error) {
+            console.error("Error fetching top categories:", error);
+        }
+    };
+
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
             return (
@@ -362,14 +460,14 @@ const AdminDashboard = () => {
                     loading={loading}
                 />
                 <StatCard
-                    title="New Users"
-                    value={userStats.totalUsers.toLocaleString()}
-                    icon={UserPlus}
+                    title="Pending Inquiries"
+                    value={inquiryCount.toLocaleString()}
+                    icon={Mail}
                     loading={loading}
                 />
                 <StatCard
                     title="Pending Quotes"
-                    value="12"
+                    value={quoteCount.toLocaleString()}
                     icon={FileText}
                     loading={loading}
                 />
@@ -385,11 +483,18 @@ const AdminDashboard = () => {
                 >
                     <Card
                         title="Sales Trends"
-                        subtitle="Performance for the last 12 months"
+                        subtitle={chartPeriod === 'yearly' ? 'Revenue for the last 5 years' : 'Revenue for the last 5 months'}
                         extra={
-                            <select className="text-xs bg-gray-50 border-none rounded-lg py-1 px-2 outline-none cursor-pointer">
-                                <option>Yearly</option>
-                                <option>Monthly</option>
+                            <select
+                                value={chartPeriod}
+                                onChange={(e) => {
+                                    setChartPeriod(e.target.value);
+                                    fetchMonthlyRevenue(e.target.value);
+                                }}
+                                className="text-xs bg-white border border-gray-200 rounded-lg py-1.5 px-3 outline-none cursor-pointer text-gray-700 font-medium focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-colors"
+                            >
+                                <option value="monthly">Monthly</option>
+                                <option value="yearly">Yearly</option>
                             </select>
                         }
                     >
@@ -440,16 +545,14 @@ const AdminDashboard = () => {
                         title="Top Categories"
                     >
                         <div className="space-y-6 mt-4">
-                            {[
-                                { name: 'Imaging Systems', percentage: 42, color: 'bg-blue-600' },
-                                { name: 'Surgical Tools', percentage: 28, color: 'bg-blue-500' },
-                                { name: 'Patient Monitoring', percentage: 18, color: 'bg-blue-400' },
-                                { name: 'Diagnostic Equipment', percentage: 12, color: 'bg-blue-300' },
-                            ].map((category, index) => (
+                            {topCategories.length > 0 ? topCategories.map((category, index) => (
                                 <div key={index} className="space-y-2">
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-gray-600 font-medium">{category.name}</span>
-                                        <span className="text-gray-900 font-bold">{category.percentage}%</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-400 text-xs">{formatCurrency(category.revenue)}</span>
+                                            <span className="text-gray-900 font-bold">{category.percentage}%</span>
+                                        </div>
                                     </div>
                                     <div className="w-full bg-gray-100 rounded-full h-2">
                                         <motion.div
@@ -460,10 +563,34 @@ const AdminDashboard = () => {
                                         />
                                     </div>
                                 </div>
-                            ))}
+                            )) : (
+                                <p className="text-center py-6 text-gray-400 text-sm">No category data available</p>
+                            )}
+
+                            {/* Service Revenue - shown separately */}
+                            {serviceRevenue.revenue > 0 && (
+                                <div className="mt-6 pt-5 border-t border-gray-100">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Service Revenue</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-emerald-50 rounded-xl p-4">
+                                        <div>
+                                            <p className="text-lg font-bold text-emerald-700">{formatCurrency(serviceRevenue.revenue)}</p>
+                                            <p className="text-xs text-emerald-500 font-medium">{serviceRevenue.orders} service orders</p>
+                                        </div>
+                                        <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                            <Stethoscope className="w-5 h-5 text-emerald-600" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="mt-8">
-                            <button className="w-full py-3 bg-gray-50 text-gray-600 text-sm font-bold rounded-xl hover:bg-gray-100 transition-colors">
+                            <button
+                                onClick={() => navigate('/admin/categories/report')}
+                                className="w-full py-3 bg-gray-50 text-gray-600 text-sm font-bold rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                            >
                                 View Full Report
                             </button>
                         </div>
@@ -496,13 +623,12 @@ const AdminDashboard = () => {
                                     <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Amount</th>
                                     <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
                                     <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Date</th>
-                                    <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {orderStats.recentOrders.length > 0 ? (
                                     orderStats.recentOrders.map((order) => (
-                                        <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                                        <tr key={order.id} onClick={() => navigate(`/admin/orders/${order.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">
                                                 #{order.orderId || order.id.substring(0, 8).toUpperCase()}
                                             </td>
@@ -542,16 +668,11 @@ const AdminDashboard = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {order.orderDateObj ? order.orderDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-400">
-                                                <button className="hover:text-gray-600">
-                                                    <MoreHorizontal className="w-5 h-5" />
-                                                </button>
-                                            </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="7" className="px-6 py-16 text-center">
+                                        <td colSpan="6" className="px-6 py-16 text-center">
                                             <div className="flex flex-col items-center justify-center text-gray-400">
                                                 <ShoppingBag className="w-12 h-12 mb-3 opacity-20" />
                                                 <p className="font-bold text-lg">No orders found</p>
@@ -578,9 +699,9 @@ const AdminPage = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const { user, signOut, loading } = useAuth();
 
-    // Admin Session Verification
+    // Admin Session Verification — uses window flag so it resets on page reload
     const [isAdminVerified, setIsAdminVerified] = useState(
-        sessionStorage.getItem("admin_verified") === "true"
+        window.__adminVerified === true
     );
 
     if (loading) {
@@ -591,14 +712,30 @@ const AdminPage = () => {
         );
     }
 
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const handleRefreshData = () => {
+        setRefreshing(true);
+        setRefreshKey(prev => prev + 1);
+        // Force re-mount all child components by changing key
+        setTimeout(() => {
+            setRefreshing(false);
+            toast.success("Admin data refreshed!");
+        }, 1000);
+    };
+
     const handleLogout = async () => {
+        window.__adminVerified = false;
         sessionStorage.removeItem("admin_verified");
-        await signOut();
-        toast.success("Logged out successfully!");
-        navigate("/signin");
+        sessionStorage.removeItem("admin_email");
+        setIsAdminVerified(false);
+        toast.success("Logged out of Admin Panel!");
+        navigate("/admin");
     };
 
     const handleAdminVerify = (status) => {
+        window.__adminVerified = status;
         setIsAdminVerified(status);
         if (status) {
             toast.success("Identity verified. Welcome to Admin Panel.");
@@ -619,6 +756,9 @@ const AdminPage = () => {
         { path: "/admin/categories", icon: Layers, label: "Categories" },
         { path: "/admin/users", icon: Users, label: "Users" },
         { path: "/admin/coupons", icon: Ticket, label: "Coupons" },
+        { path: "/admin/blog", icon: BookOpen, label: "Blog Management" },
+        { path: "/admin/inquiries", icon: Mail, label: "Contact Inquiries" },
+        { path: "/admin/quotes", icon: FileText, label: "Requested Quotes" },
         // { path: "/admin/banners", icon: ImageIcon, label: "Banners" },
         // { path: "/admin/announcements", icon: Megaphone, label: "Announcements" },
     ];
@@ -627,8 +767,6 @@ const AdminPage = () => {
 
     return (
         <div className="flex h-screen bg-[#f8fbff] overflow-hidden">
-            <ToastContainer position="top-right" autoClose={3000} />
-
             {/* Sidebar - Desktop */}
             <DashboardSidebar
                 menuItems={menuItems}
@@ -646,52 +784,36 @@ const AdminPage = () => {
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Top Bar / Header */}
-                <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 z-20 sticky top-0">
-                    <div className="flex items-center gap-4 flex-1 max-w-xl">
-                        <button
-                            onClick={() => setMobileMenuOpen(true)}
-                            className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                            <Menu className="w-6 h-6 text-gray-500" />
-                        </button>
-                        <div className="relative w-full">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                            <input
-                                type="text"
-                                placeholder="Search orders, products, or customers..."
-                                className="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-4 border-r border-gray-100 pr-6">
-                            <button className="relative p-2 text-gray-400 hover:text-gray-900 transition-colors">
-                                <Bell className="w-6 h-6" />
-                                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full"></span>
-                            </button>
-                            <button className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
-                                <Settings className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <button className="flex items-center gap-2 text-sm font-bold text-gray-700 hover:text-blue-600 transition-colors">
-                            <span>English (US)</span>
-                            <ChevronDown className="w-4 h-4" />
-                        </button>
-                    </div>
-                </header>
-
+                {/* Top Bar */}
+                <div className="flex items-center justify-between px-8 py-3 bg-white border-b border-gray-100">
+                    <button
+                        onClick={() => setMobileMenuOpen(true)}
+                        className="lg:hidden inline-flex items-center justify-center p-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
+                    >
+                        <Menu className="w-5 h-5 text-gray-500" />
+                    </button>
+                    <div className="hidden lg:block" />
+                    <button
+                        onClick={handleRefreshData}
+                        disabled={refreshing}
+                        className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                        title="Refresh all admin data"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                        Reload Data
+                    </button>
+                </div>
                 {/* Dashboard Viewport */}
-                <main className="flex-1 overflow-y-auto p-8 bg-[#f8fbff]">
-                    {isDashboardRoot ? (
-                        <AdminDashboard />
-                    ) : (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                            <Outlet />
-                        </div>
-                    )}
+                <main className="flex-1 overflow-y-auto p-8 bg-[#f8fbff] relative">
+                    <div key={refreshKey}>
+                        {isDashboardRoot ? (
+                            <AdminDashboard />
+                        ) : (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                                <Outlet />
+                            </div>
+                        )}
+                    </div>
                 </main>
             </div>
         </div>

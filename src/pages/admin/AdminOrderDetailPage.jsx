@@ -18,16 +18,12 @@ const AdminOrderDetailPage = () => {
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isUpdating, setIsUpdating] = useState(false);
-    const [trackingInfo, setTrackingInfo] = useState({ carrier: 'IndiaPost', trackingNumber: '' });
 
     const fetchOrder = useCallback(async () => {
         setLoading(true);
         const result = await AdminOrderService.getOrderById(id);
         if (result.success) {
             setOrder(result.order);
-            if (result.order.tracking) {
-                setTrackingInfo(result.order.tracking);
-            }
         } else {
             toast.error("Failed to fetch order details");
             navigate('/admin/orders');
@@ -42,34 +38,30 @@ const AdminOrderDetailPage = () => {
     const handleStatusUpdate = async (newStatus) => {
         if (!order) return;
         setIsUpdating(true);
-        const result = await AdminOrderService.updateOrderStatus(order.id, newStatus);
-        if (result.success) {
-            toast.success(`Order set to ${newStatus}`);
-            fetchOrder();
-        } else {
-            toast.error("Status update failed");
+        try {
+            const result = await AdminOrderService.updateOrderStatus(order.id, newStatus);
+            if (result.success) {
+                toast.success(`Order set to ${newStatus}`);
+                fetchOrder();
+            } else {
+                console.error('Status update failed:', result.error);
+                toast.error(`Status update failed: ${result.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error('Status update exception:', err);
+            toast.error(`Status update error: ${err.message}`);
         }
         setIsUpdating(false);
     };
 
-    const handleTrackingUpdate = async (e) => {
-        e.preventDefault();
-        setIsUpdating(true);
-        const result = await AdminOrderService.updateOrderStatus(order.id, 'Shipped', {
-            tracking: trackingInfo
-        });
-        if (result.success) {
-            toast.success("Tracking info updated and status set to Shipped");
-            fetchOrder();
-        } else {
-            toast.error("Tracking update failed");
-        }
-        setIsUpdating(false);
-    };
 
     const copyToClipboard = (text, label) => {
         navigator.clipboard.writeText(text);
         toast.info(`${label} copied!`, { autoClose: 1000 });
+    };
+
+    const handlePrint = () => {
+        window.print();
     };
 
     if (loading) {
@@ -108,12 +100,22 @@ const AdminOrderDetailPage = () => {
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-12">
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    .no-print, button, nav, header, footer { display: none !important; }
+                    .print-only { display: block !important; }
+                    body { background: white !important; padding: 0 !important; }
+                    .max-w-6xl { max-width: 100% !important; margin: 0 !important; }
+                    .shadow-sm, .shadow-xl { shadow: none !important; border: 1px solid #eee !important; }
+                    .bg-slate-50\/50, .bg-slate-50 { background-color: #f8fafc !important; -webkit-print-color-adjust: exact; }
+                }
+            ` }} />
             {/* Navigation Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={() => navigate('/admin/orders')}
-                        className="p-2.5 rounded-xl bg-white border border-gray-100 hover:border-blue-100 hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-all"
+                        className="p-2.5 rounded-xl bg-white border border-gray-100 hover:border-blue-100 hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-all no-print"
                     >
                         <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -131,11 +133,11 @@ const AdminOrderDetailPage = () => {
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <Button variant="outline" className="h-11 px-5 font-bold border-gray-200 text-slate-600 flex items-center gap-2">
+                <div className="flex items-center gap-3 no-print">
+                    <Button variant="outline" onClick={handlePrint} className="h-11 px-5 font-bold border-gray-200 text-slate-600 flex items-center gap-2">
                         <Printer className="w-4 h-4" /> Print Invoice
                     </Button>
-                    <Button variant="outline" className="h-11 px-5 font-bold border-gray-200 text-slate-600 flex items-center gap-2">
+                    <Button variant="outline" onClick={handlePrint} className="h-11 px-5 font-bold border-gray-200 text-slate-600 flex items-center gap-2">
                         <Download className="w-4 h-4" /> Download PDF
                     </Button>
                 </div>
@@ -209,7 +211,7 @@ const AdminOrderDetailPage = () => {
                     </Card>
 
                     {/* Quick Controls */}
-                    <Card className="p-6 border-none shadow-sm">
+                    <Card className="p-6 border-none shadow-sm no-print">
                         <h3 className="font-bold text-slate-900 mb-6">Manage Order Status</h3>
                         <div className="flex flex-wrap gap-3">
                             {Object.values(ORDER_STATUSES).map((status) => (
@@ -320,57 +322,6 @@ const AdminOrderDetailPage = () => {
                         </button>
                     </Card>
 
-                    {/* Tracking Info Form */}
-                    <Card className="p-6 border-none shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-widest">Logistics & Tracking</h3>
-                            <Truck className="w-4 h-4 text-purple-600" />
-                        </div>
-
-                        <form onSubmit={handleTrackingUpdate} className="space-y-4">
-                            <div>
-                                <label className="block text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-2">Carrier Partner</label>
-                                <select
-                                    className="w-full h-12 px-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/10 transition-all font-bold text-[13px] text-slate-700 appearance-none"
-                                    value={trackingInfo.carrier}
-                                    onChange={(e) => setTrackingInfo({ ...trackingInfo, carrier: e.target.value })}
-                                >
-                                    {Object.values(SHIPPING_CARRIERS).map(c => (
-                                        <option key={c.code} value={c.name}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-2">Tracking ID / AWB</label>
-                                <input
-                                    type="text"
-                                    placeholder="Enter tracking number"
-                                    className="w-full h-12 px-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/10 transition-all font-bold text-[13px] text-slate-700 placeholder:text-slate-300"
-                                    value={trackingInfo.trackingNumber}
-                                    onChange={(e) => setTrackingInfo({ ...trackingInfo, trackingNumber: e.target.value })}
-                                    required
-                                />
-                            </div>
-                            <Button
-                                type="submit"
-                                variant="primary"
-                                className="w-full h-12 bg-blue-600 text-white font-black uppercase text-[12px] tracking-widest active:scale-95 transition-all shadow-xl shadow-blue-100"
-                                loading={isUpdating && order.status !== 'Shipped'}
-                            >
-                                {order.tracking ? 'Update Tracking' : 'Confirm Shipment'}
-                            </Button>
-                        </form>
-
-                        {order.tracking && (
-                            <div className="mt-6 p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-2">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-purple-400">Current Shipment</p>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[13px] font-bold text-purple-700">{order.tracking.carrier}</span>
-                                    <span className="text-[13px] font-black text-purple-900 font-mono tracking-tighter">{order.tracking.trackingNumber}</span>
-                                </div>
-                            </div>
-                        )}
-                    </Card>
                 </div>
             </div>
         </div>

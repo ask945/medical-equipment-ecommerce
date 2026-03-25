@@ -1,7 +1,7 @@
 import { MessageCircle } from 'lucide-react';
 
 const WhatsAppButton = () => {
-  const phoneNumber = "919999999999"; // Placeholder India number
+  const phoneNumber = "+917718837352"; // Placeholder India number
   const message = encodeURIComponent("Hello! I'm interested in your medical products and have a few questions. Could you please help me?");
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
 
@@ -14,7 +14,7 @@ const WhatsAppButton = () => {
       aria-label="Contact us on WhatsApp"
     >
       <MessageCircle size={32} className="group-hover:rotate-12 transition-transform" />
-      
+
       {/* Tooltip */}
       <span className="absolute right-16 bg-white text-text-primary text-xs font-semibold px-3 py-2 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border pointer-events-none">
         Chat with Support

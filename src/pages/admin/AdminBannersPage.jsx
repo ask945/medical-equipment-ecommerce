@@ -9,7 +9,7 @@ import {
     AlertTriangle, Settings, GripVertical, Link as LinkIcon,
     Calendar
 } from 'lucide-react';
-import { Card, Button, Input, LoadingSpinner } from '../../components/ui';
+import { Card, Button, Input, LoadingSpinner, ConfirmDialog } from '../../components/ui';
 
 /**
  * AdminBannersPage Component
@@ -33,6 +33,7 @@ const AdminBannersPage = () => {
     const [isAddingNew, setIsAddingNew] = useState(false);
     const [activeTab, setActiveTab] = useState('active'); // 'active', 'drafts', 'archived'
     const [loading, setLoading] = useState(true);
+    const [confirmDelete, setConfirmDelete] = useState(null);
 
     // Alert & Editor State
     const [siteAlerts, setSiteAlerts] = useState([
@@ -149,10 +150,6 @@ const AdminBannersPage = () => {
     };
 
     const handleDeleteBanner = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this banner?')) {
-            return;
-        }
-
         try {
             await deleteDoc(doc(db, 'banners', id));
             const updatedBanners = banners.filter(banner => banner.id !== id);
@@ -266,7 +263,7 @@ const AdminBannersPage = () => {
                         <Button size="sm" variant="ghost" onClick={() => startEdit(banner)} className="h-8 w-8 p-0">
                             <Edit className="w-3.5 h-3.5 text-gray-400" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDeleteBanner(banner.id)} className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-500">
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(banner.id)} className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-500">
                             <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                     </div>
@@ -516,6 +513,16 @@ const AdminBannersPage = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <ConfirmDialog
+                isOpen={!!confirmDelete}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={() => handleDeleteBanner(confirmDelete)}
+                title="Delete Banner"
+                message="Are you sure you want to delete this banner?"
+                confirmText="Delete"
+                variant="danger"
+            />
         </motion.div>
     );
 };

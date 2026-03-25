@@ -17,3 +17,9 @@ export async function createUserProfile(uid, data) {
     createdAt: new Date().toISOString(),
   });
 }
+
+export async function updateUserProfile(uid, data) {
+  const ref = doc(db, COLLECTION, uid);
+  await setDoc(ref, data, { merge: true });
+}
+

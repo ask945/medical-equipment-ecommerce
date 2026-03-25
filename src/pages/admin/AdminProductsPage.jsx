@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
     Search, Plus, Edit, Trash2, Eye,
     TrendingUp, TrendingDown,
     RefreshCw, BarChart2, Archive, Pencil
 } from "lucide-react";
-import { Button, Card, Input, Modal, Badge, Alert, LoadingSpinner } from "../../components/ui";
+import { Button, Card, Input, Modal, Badge, Alert, LoadingSpinner, ConfirmDialog } from "../../components/ui";
 import { formatCurrency } from "../../utils/formatUtils";
+import { toast } from "react-toastify";
 
 
 /**
@@ -22,6 +23,9 @@ import { formatCurrency } from "../../utils/formatUtils";
  * - Product Visibility Control
  */
 const AdminProductsPage = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const brandFilter = searchParams.get('brand') || '';
+
     // Data States
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
@@ -36,6 +40,8 @@ const AdminProductsPage = () => {
     const [sortOrder, setSortOrder] = useState("asc");
     const [filterStatus, setFilterStatus] = useState("all"); // all, instock, outofstock, lowstock
     const [filterPerformance, setFilterPerformance] = useState("all"); // all, good, poor
+    const [filterBrand, setFilterBrand] = useState(brandFilter || "all");
+    const [filterCategory, setFilterCategory] = useState("all");
     const [showFilters, setShowFilters] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -45,6 +51,9 @@ const AdminProductsPage = () => {
     const [bulkQuantity, setBulkQuantity] = useState("");
     const [viewProductModal, setViewProductModal] = useState({ open: false, product: null });
     const [performingBulkOperation, setPerformingBulkOperation] = useState(false);
+    const [syncingStock, setSyncingStock] = useState(false);
+    const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(null);
 
     // Stats
     const [stats, setStats] = useState({
@@ -55,48 +64,19 @@ const AdminProductsPage = () => {
         totalValue: 0
     });
 
+    // Fetch orders once for sales data
     useEffect(() => {
-        fetchProducts();
-    }, []);
-
-    useEffect(() => {
-        filterAndSortProducts();
-        setCurrentPage(1); // Reset to first page when filters change
-    }, [products, searchTerm, sortBy, sortOrder, filterStatus, filterPerformance, orderData]);
-
-    /**
-     * Fetch all products and calculate performance metrics
-     */
-    const fetchProducts = async () => {
-        try {
-            setLoading(true);
-
-            // Fetch products
-            const productsCol = collection(db, "products");
-            const productsSnapshot = await getDocs(productsCol);
-            const productsList = productsSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-
-            // Fetch orders to calculate performance (optional, might fail if rules are strict)
-            let salesData = {};
+        const fetchOrderData = async () => {
             try {
-                const ordersCol = collection(db, "orders");
-                const ordersSnapshot = await getDocs(ordersCol);
-
-                // Calculate sales per product
+                const ordersSnapshot = await getDocs(collection(db, "orders"));
+                const salesData = {};
                 ordersSnapshot.docs.forEach(orderDoc => {
                     const order = orderDoc.data();
                     if (order.items && Array.isArray(order.items)) {
                         order.items.forEach(item => {
                             const productId = item.productId || item.id;
                             if (!salesData[productId]) {
-                                salesData[productId] = {
-                                    totalSales: 0,
-                                    totalRevenue: 0,
-                                    orderCount: 0
-                                };
+                                salesData[productId] = { totalSales: 0, totalRevenue: 0, orderCount: 0 };
                             }
                             salesData[productId].totalSales += item.quantity || 0;
                             salesData[productId].totalRevenue += (item.price * (item.quantity || 1)) || 0;
@@ -104,53 +84,83 @@ const AdminProductsPage = () => {
                         });
                     }
                 });
-                console.log("Successfully fetched performance metrics from orders");
-            } catch (orderError) {
-                console.warn("Failed to fetch orders for performance metrics (likely permissions):", orderError);
-                // Continue without sales data - products will still show
+                setOrderData(salesData);
+            } catch (err) {
+                console.warn("Failed to fetch order metrics:", err);
             }
+        };
+        fetchOrderData();
+    }, []);
 
-            setOrderData(salesData);
+    // Real-time product listener
+    useEffect(() => {
+        setLoading(true);
+        const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
+            const productsList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            // Enhance products with performance data
             const enhancedProducts = productsList.map(product => {
-                const sales = salesData[product.id] || { totalSales: 0, totalRevenue: 0, orderCount: 0 };
+                const sales = orderData[product.id] || { totalSales: 0, totalRevenue: 0, orderCount: 0 };
                 const stock = Number(product.stock) || 0;
-
                 return {
                     ...product,
                     salesData: sales,
                     stockStatus: stock === 0 ? 'outofstock' : stock < 10 ? 'lowstock' : 'instock',
                     performance: sales.totalSales > 20 ? 'good' : sales.totalSales > 5 ? 'average' : 'poor',
-                    isVisible: product.showOnHome !== false // Default to visible
+                    isVisible: product.showOnHome !== false,
+                    isDisabledByCategory: product.disabledByCategory === true
                 };
             });
 
             setProducts(enhancedProducts);
 
-            // Calculate stats
             const totalValue = enhancedProducts.reduce((sum, p) => sum + (Number(p.price) * Number(p.stock)), 0);
             setStats({
                 total: enhancedProducts.length,
-                inStock: enhancedProducts.filter(p => p.stockStatus === 'instock').length,
-                outOfStock: enhancedProducts.filter(p => p.stockStatus === 'outofstock').length,
+                inStock: enhancedProducts.filter(p => p.isVisible && !p.isDisabledByCategory).length,
+                outOfStock: enhancedProducts.filter(p => !p.isVisible && !p.isDisabledByCategory).length,
                 lowStock: enhancedProducts.filter(p => p.stockStatus === 'lowstock').length,
+                disabled: enhancedProducts.filter(p => p.isDisabledByCategory).length,
                 totalValue
             });
 
-        } catch (error) {
-            console.error("Error fetching products:", error);
-            toast.error("Failed to load products");
-        } finally {
             setLoading(false);
-        }
-    };
+        }, (error) => {
+            console.error("Error listening to products:", error);
+            toast.error("Failed to load products");
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [orderData]);
+
+    useEffect(() => {
+        filterAndSortProducts();
+        setCurrentPage(1);
+    }, [products, searchTerm, sortBy, sortOrder, filterStatus, filterPerformance, orderData, filterBrand, filterCategory]);
 
     /**
      * Filter and sort products
      */
     const filterAndSortProducts = () => {
         let filtered = [...products];
+
+        // Brand filter
+        if (filterBrand && filterBrand !== 'all') {
+            filtered = filtered.filter(product => {
+                const productBrand = (product.brand || '').toLowerCase().trim();
+                const brandSlug = productBrand.replace(/\s+/g, '-');
+                return brandSlug === filterBrand.toLowerCase() || productBrand === filterBrand.toLowerCase();
+            });
+        }
+
+        // Category filter
+        if (filterCategory && filterCategory !== 'all') {
+            filtered = filtered.filter(product => {
+                const productCategory = (product.category || '').toLowerCase().trim();
+                const categorySlug = productCategory.replace(/\s+/g, '-');
+                return categorySlug === filterCategory.toLowerCase() || productCategory === filterCategory.toLowerCase();
+            });
+        }
 
         // Search filter
         if (searchTerm) {
@@ -162,8 +172,16 @@ const AdminProductsPage = () => {
         }
 
         // Stock status filter
-        if (filterStatus !== "all") {
-            filtered = filtered.filter(product => product.stockStatus === filterStatus);
+        if (filterStatus === "instock") {
+            filtered = filtered.filter(product => product.isVisible && !product.isDisabledByCategory);
+        } else if (filterStatus === "outofstock") {
+            filtered = filtered.filter(product => !product.isVisible && !product.isDisabledByCategory);
+        } else if (filterStatus === "lowstock") {
+            filtered = filtered.filter(product => product.stockStatus === 'lowstock');
+        } else if (filterStatus === 'disabled') {
+            filtered = filtered.filter(product => product.isDisabledByCategory);
+        } else if (filterStatus === 'archived') {
+            filtered = filtered.filter(product => product.status === 'archived');
         }
 
         // Performance filter
@@ -260,7 +278,7 @@ const AdminProductsPage = () => {
             setBulkModal({ open: false, type: null });
             setBulkQuantity("");
             setSelectedProducts([]);
-            fetchProducts();
+            // onSnapshot auto-refreshes
         } catch (error) {
             console.error("Error restocking:", error);
             toast.error("Failed to restock products");
@@ -294,7 +312,7 @@ const AdminProductsPage = () => {
             setBulkModal({ open: false, type: null });
             setBulkQuantity("");
             setSelectedProducts([]);
-            fetchProducts();
+            // onSnapshot auto-refreshes
         } catch (error) {
             console.error("Error adding stock:", error);
             toast.error("Failed to add stock");
@@ -322,13 +340,97 @@ const AdminProductsPage = () => {
             toast.success(`Deleted ${selectedProducts.length} products!`);
             setBulkModal({ open: false, type: null });
             setSelectedProducts([]);
-            fetchProducts();
+            // onSnapshot auto-refreshes
         } catch (error) {
             console.error("Error deleting products:", error);
             toast.error("Failed to delete products");
         } finally {
             setPerformingBulkOperation(false);
         }
+    };
+
+    /**
+     * Sync Stock — recalculate stock by subtracting quantities from all non-cancelled orders
+     */
+    const handleSyncStock = async () => {
+        setShowSyncConfirm(false);
+        setSyncingStock(true);
+        try {
+            // Fetch all products to get their current stock as base
+            const productsSnap = await getDocs(collection(db, "products"));
+            const productMap = {};
+            productsSnap.docs.forEach(d => {
+                const data = d.data();
+                productMap[d.id] = {
+                    ref: doc(db, "products", d.id),
+                    originalStock: Number(data.originalStock || data.stock) || 0,
+                };
+            });
+
+            // Fetch all orders
+            const ordersSnap = await getDocs(collection(db, "orders"));
+            const cancelStatuses = ['cancelled', 'declined', 'refunded'];
+
+            // Calculate total sold per product from non-cancelled orders
+            const soldMap = {};
+            ordersSnap.docs.forEach(d => {
+                const order = d.data();
+                if (cancelStatuses.includes((order.status || '').toLowerCase())) return;
+                if (order.items && Array.isArray(order.items)) {
+                    order.items.forEach(item => {
+                        if (item.category === 'Services' || String(item.id).startsWith('service-')) return;
+                        soldMap[item.id] = (soldMap[item.id] || 0) + (item.quantity || 1);
+                    });
+                }
+            });
+
+            // Update each product: stock = originalStock - totalSold
+            const batch = writeBatch(db);
+            let updated = 0;
+            for (const [productId, product] of Object.entries(productMap)) {
+                const totalSold = soldMap[productId] || 0;
+                const newStock = Math.max(0, product.originalStock - totalSold);
+                batch.update(product.ref, {
+                    stock: newStock,
+                    originalStock: product.originalStock, // Save original for future syncs
+                });
+                updated++;
+            }
+            await batch.commit();
+
+            // Also reset fake ratings: verify against actual review documents
+            const reviewsSnap = await getDocs(collection(db, "reviews"));
+            const realReviewCounts = {};
+            const realRatingSums = {};
+            reviewsSnap.docs.forEach(d => {
+                const r = d.data();
+                if (r.productId) {
+                    realReviewCounts[r.productId] = (realReviewCounts[r.productId] || 0) + 1;
+                    realRatingSums[r.productId] = (realRatingSums[r.productId] || 0) + (r.rating || 0);
+                }
+            });
+
+            const ratingBatch = writeBatch(db);
+            let ratingsFixed = 0;
+            productsSnap.docs.forEach(d => {
+                const data = d.data();
+                const count = realReviewCounts[d.id] || 0;
+                const avg = count > 0 ? Number((realRatingSums[d.id] / count).toFixed(1)) : 0;
+                if (Number(data.rating) !== avg || Number(data.reviews) !== count) {
+                    ratingBatch.update(doc(db, "products", d.id), { rating: avg, reviews: count });
+                    ratingsFixed++;
+                }
+            });
+            if (ratingsFixed > 0) {
+                await ratingBatch.commit();
+            }
+
+            toast.success(`Stock synced for ${updated} products! Ratings verified for ${ratingsFixed} products.`);
+        } catch (error) {
+            console.error("Error syncing stock:", error);
+            toast.error(`Stock sync failed: ${error.message}`);
+        }
+        setSyncingStock(false);
     };
 
     /**
@@ -343,7 +445,7 @@ const AdminProductsPage = () => {
             });
 
             toast.success(currentVisibility ? "Product hidden from homepage" : "Product shown on homepage");
-            fetchProducts();
+            // onSnapshot auto-refreshes
         } catch (error) {
             console.error("Error updating visibility:", error);
             toast.error("Failed to update visibility");
@@ -354,14 +456,10 @@ const AdminProductsPage = () => {
      * Delete single product
      */
     const handleDeleteProduct = async (productId) => {
-        if (!window.confirm("Are you sure you want to delete this product?")) {
-            return;
-        }
-
         try {
             await deleteDoc(doc(db, "products", productId));
             toast.success("Product deleted successfully!");
-            fetchProducts();
+            // onSnapshot auto-refreshes
         } catch (error) {
             console.error("Error deleting product:", error);
             toast.error("Failed to delete product");
@@ -446,14 +544,35 @@ const AdminProductsPage = () => {
                 <div>
                     <h1 className="text-4xl font-black text-[#1e293b] tracking-tight mb-1">Products Catalog</h1>
                     <p className="text-slate-500 font-medium">Manage your medical equipment inventory, pricing, and availability.</p>
+                    {(filterBrand !== 'all' || filterCategory !== 'all') && (
+                        <div className="flex items-center gap-2 mt-2">
+                            {filterBrand !== 'all' && (
+                                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
+                                    Brand: {filterBrand}
+                                </span>
+                            )}
+                            {filterCategory !== 'all' && (
+                                <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-200">
+                                    Category: {filterCategory}
+                                </span>
+                            )}
+                            <button
+                                onClick={() => { setFilterBrand('all'); setFilterCategory('all'); setSearchParams({}); }}
+                                className="text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
+                            >
+                                Clear filters
+                            </button>
+                        </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => window.location.reload()}
-                        className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold h-11 px-4 rounded-xl transition-all shadow-sm"
+                        onClick={() => setShowSyncConfirm(true)}
+                        disabled={syncingStock}
+                        className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold h-11 px-4 rounded-xl transition-all shadow-sm disabled:opacity-50"
                     >
-                        <RefreshCw className="w-4 h-4" />
-                        <span className="hidden sm:inline">Refresh Data</span>
+                        <RefreshCw className={`w-4 h-4 ${syncingStock ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">{syncingStock ? 'Syncing...' : 'Sync Stock'}</span>
                     </button>
                     <Link
                         to="/admin/products/add"
@@ -473,6 +592,7 @@ const AdminProductsPage = () => {
                         { label: 'All Products', count: stats.total, value: 'all' },
                         { label: 'Published', count: stats.inStock, value: 'instock' },
                         { label: 'Drafts', count: stats.outOfStock, value: 'outofstock' },
+                        { label: 'Disabled', count: stats.disabled || 0, value: 'disabled' },
                         { label: 'Archived', count: 0, value: 'archived' }
                     ].map((tab) => (
                         <button
@@ -489,16 +609,38 @@ const AdminProductsPage = () => {
                 </div>
 
                 {/* Toolbar */}
-                <div className="px-8 py-5 flex items-center justify-between">
-                    <div className="relative w-80">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Search products..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
-                        />
+                <div className="px-8 py-5 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 flex-1">
+                        <div className="relative w-72">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Search products..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
+                            />
+                        </div>
+                        <select
+                            value={filterBrand}
+                            onChange={(e) => setFilterBrand(e.target.value)}
+                            className="py-2.5 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/10 font-medium text-slate-700 min-w-[140px]"
+                        >
+                            <option value="all">All Brands</option>
+                            {[...new Set(products.map(p => p.brand).filter(Boolean))].sort().map(brand => (
+                                <option key={brand} value={brand.toLowerCase().replace(/\s+/g, '-')}>{brand}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={filterCategory}
+                            onChange={(e) => setFilterCategory(e.target.value)}
+                            className="py-2.5 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/10 font-medium text-slate-700 min-w-[150px]"
+                        >
+                            <option value="all">All Categories</option>
+                            {[...new Set(products.map(p => p.category).filter(Boolean))].sort().map(cat => (
+                                <option key={cat} value={cat.toLowerCase().replace(/\s+/g, '-')}>{cat}</option>
+                            ))}
+                        </select>
                     </div>
                     {selectedProducts.length > 0 && (
                         <div className="flex items-center gap-2">
@@ -594,7 +736,7 @@ const AdminProductsPage = () => {
                                         </td>
                                         <td className="py-6 px-4 text-center">
                                             <span className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest leading-none inline-block">
-                                                {product.type || 'Diagnostics'}
+                                                {product.type || product.category || 'Uncategorized'}
                                             </span>
                                         </td>
                                         <td className="py-6 px-4 text-center text-[15px] font-bold text-slate-900">
@@ -628,16 +770,39 @@ const AdminProductsPage = () => {
                                             </div>
                                         </td>
                                         <td className="py-6 px-4 text-center">
-                                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${product.isVisible
-                                                ? 'bg-[#ecfdf5] text-[#059669]'
-                                                : 'bg-slate-50 text-slate-400'
+                                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
+                                                product.isDisabledByCategory
+                                                    ? 'bg-red-50 text-red-500'
+                                                    : product.isVisible
+                                                        ? 'bg-[#ecfdf5] text-[#059669]'
+                                                        : 'bg-slate-50 text-slate-400'
                                                 }`}>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${product.isVisible ? 'bg-[#10b981]' : 'bg-slate-400'}`} />
-                                                {product.isVisible ? 'Published' : 'Draft'}
+                                                <div className={`w-1.5 h-1.5 rounded-full ${
+                                                    product.isDisabledByCategory ? 'bg-red-500' : product.isVisible ? 'bg-[#10b981]' : 'bg-slate-400'
+                                                }`} />
+                                                {product.isDisabledByCategory ? 'Disabled' : product.isVisible ? 'Published' : 'Draft'}
                                             </div>
                                         </td>
                                         <td className="py-6 px-4 text-right pr-4">
                                             <div className="flex items-center justify-end gap-1.5">
+                                                {product.isDisabledByCategory ? (
+                                                    <div
+                                                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-red-50 border border-red-100 text-red-400 cursor-not-allowed"
+                                                        title="Disabled by inactive category"
+                                                    >
+                                                        <Archive className="w-5 h-5" />
+                                                    </div>
+                                                ) : (
+                                                <button
+                                                    onClick={() => toggleProductVisibility(product.id, product.isVisible)}
+                                                    className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-all hover:shadow-sm ${product.isVisible
+                                                        ? 'bg-amber-50 border-amber-100 text-amber-600 hover:bg-amber-100'
+                                                        : 'bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100'}`}
+                                                    title={product.isVisible ? "Convert to Draft" : "Publish Product"}
+                                                >
+                                                    {product.isVisible ? <Archive className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
+                                                </button>
+                                                )}
                                                 <button
                                                     onClick={() => setViewProductModal({ open: true, product })}
                                                     className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-100 hover:bg-blue-50 transition-all hover:shadow-sm"
@@ -650,7 +815,7 @@ const AdminProductsPage = () => {
                                                     </button>
                                                 </Link>
                                                 <button
-                                                    onClick={() => handleDeleteProduct(product.id)}
+                                                    onClick={() => setConfirmDelete({ id: product.id })}
                                                     className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-100 text-slate-400 hover:text-red-600 hover:border-red-100 hover:bg-red-50 transition-all hover:shadow-sm"
                                                 >
                                                     <Trash2 className="w-5 h-5" />
@@ -863,6 +1028,32 @@ const AdminProductsPage = () => {
                     </div>
                 )}
             </Modal>
+            {/* Sync Stock Confirmation Modal */}
+            <Modal
+                isOpen={showSyncConfirm}
+                onClose={() => setShowSyncConfirm(false)}
+                title="Sync Stock"
+            >
+                <div className="p-4">
+                    <p className="text-sm text-slate-600 mb-4">
+                        This will recalculate stock for <strong>all products</strong> based on existing orders. Current stock will be used as the base and quantities from non-cancelled orders will be subtracted.
+                    </p>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="ghost" onClick={() => setShowSyncConfirm(false)}>Cancel</Button>
+                        <Button variant="primary" onClick={handleSyncStock}>Sync Stock</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            <ConfirmDialog
+                isOpen={!!confirmDelete}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={() => handleDeleteProduct(confirmDelete?.id)}
+                title="Delete Product"
+                message="Are you sure you want to delete this product? This cannot be undone."
+                confirmText="Delete"
+                variant="danger"
+            />
         </motion.div >
     );
 };

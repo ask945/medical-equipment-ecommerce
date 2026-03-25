@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, getDoc, query, where, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, addDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const COLLECTION = 'orders';
@@ -8,6 +8,20 @@ export async function createOrder(orderData) {
     ...orderData,
     createdAt: new Date().toISOString(),
   });
+
+  // Decrement stock for each product (skip services)
+  if (orderData.items && Array.isArray(orderData.items)) {
+    for (const item of orderData.items) {
+      if (item.category === 'Services' || String(item.id).startsWith('service-')) continue;
+      try {
+        const productRef = doc(db, 'products', item.id);
+        await updateDoc(productRef, { stock: increment(-(item.quantity || 1)) });
+      } catch (err) {
+        console.warn(`Failed to decrement stock for ${item.id}:`, err.message);
+      }
+    }
+  }
+
   return docRef.id;
 }
 

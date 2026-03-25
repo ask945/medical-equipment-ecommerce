@@ -105,8 +105,28 @@ export default function MyOrdersPage() {
                 <p className="text-sm text-text-secondary flex-1 truncate">
                   {(order.items || []).map((i) => i.name).join(', ')}
                 </p>
-                <p className="text-lg font-bold text-text-primary">{formatCurrency(order.total || 0)}</p>
               </div>
+              {/* Bill Breakdown */}
+              {(() => {
+                const computedSubtotal = order.subtotal || (order.items || []).reduce((s, i) => s + (i.price * (i.quantity || 1)), 0);
+                const discount = order.couponDiscount || 0;
+                const isServiceOnlyOrder = (order.items || []).every(i => i.category === 'Services' || String(i.id).startsWith('service-'));
+                const shipping = order.shippingCost || 0;
+                const tax = order.tax || ((computedSubtotal - discount) * 0.085);
+                return (
+                  <div className="mt-3 pt-3 border-t border-border/60 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-secondary">
+                    <span>Subtotal: <span className="font-semibold text-text-primary">{formatCurrency(computedSubtotal)}</span></span>
+                    {discount > 0 && (
+                      <span>Discount: <span className="font-semibold text-green-600">-{formatCurrency(discount)}</span></span>
+                    )}
+                    {!isServiceOnlyOrder && (
+                      <span>Shipping: <span className="font-semibold text-text-primary">{shipping > 0 ? formatCurrency(shipping) : 'Free'}</span></span>
+                    )}
+                    <span>Tax: <span className="font-semibold text-text-primary">{formatCurrency(tax)}</span></span>
+                    <span className="ml-auto text-sm">Total: <span className="font-bold text-primary text-base">{formatCurrency(order.total || 0)}</span></span>
+                  </div>
+                );
+              })()}
             </Link>
           ))}
         </div>

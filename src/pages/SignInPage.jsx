@@ -9,10 +9,11 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -27,6 +28,7 @@ export default function SignInPage() {
     }
 
     setError('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
@@ -38,12 +40,49 @@ export default function SignInPage() {
       }
 
       if (result.success) {
-        navigate('/profile');
+        if (isSignUp) {
+          setSuccessMessage(result.message || 'Signup successful. Please verify your email.');
+          // Clear form and switch to login mode after a delay
+          setTimeout(() => {
+            setIsSignUp(false);
+            setSuccessMessage('');
+            setPassword(''); // clear password field
+            // Keep the email field populated so they don't have to re-type it
+          }, 4000);
+        } else {
+          navigate('/profile');
+        }
       } else {
         setError(result.error || 'Authentication failed');
       }
     } catch (err) {
       setError(err.message || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!email) {
+      setError('Please enter your email address to reset password.');
+      setSuccessMessage('');
+      return;
+    }
+
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    try {
+      const result = await resetPassword(email);
+      if (result.success) {
+        setSuccessMessage('Password reset link sent! Check your email.');
+      } else {
+        setError(result.error || 'Failed to send reset email.');
+      }
+    } catch (err) {
+      setError('An error occurred.');
     } finally {
       setLoading(false);
     }
@@ -74,6 +113,9 @@ export default function SignInPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="bg-danger/10 text-danger text-sm px-4 py-2.5 rounded-lg">{error}</div>
+            )}
+            {successMessage && (
+              <div className="bg-green-50 text-success text-sm px-4 py-2.5 rounded-lg border border-green-100">{successMessage}</div>
             )}
 
             {isSignUp && (
@@ -129,7 +171,13 @@ export default function SignInPage() {
                   <input type="checkbox" className="w-4 h-4 accent-primary rounded" />
                   <span className="text-sm text-text-secondary">Remember me</span>
                 </label>
-                <a href="#" className="text-sm text-primary hover:underline font-medium">Forgot password?</a>
+                <button 
+                  type="button" 
+                  onClick={handleForgotPassword}
+                  className="text-sm text-primary hover:underline font-medium"
+                >
+                  Forgot password?
+                </button>
               </div>
             )}
 
@@ -149,7 +197,7 @@ export default function SignInPage() {
             <p className="text-sm text-text-secondary">
               {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
               <button
-                onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
+                onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccessMessage(''); }}
                 className="text-primary font-medium hover:underline"
               >
                 {isSignUp ? 'Sign In' : 'Create Account'}

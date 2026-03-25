@@ -1,14 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const SidebarProfile = () => {
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
+    const [adminName, setAdminName] = useState('Administrator');
+
+    const isAdminVerified = window.__adminVerified === true;
+    const adminEmail = sessionStorage.getItem("admin_email") || "";
+
+    // Fetch admin name from Firestore
+    useEffect(() => {
+        if (isAdminVerified && adminEmail) {
+            const fetchAdminName = async () => {
+                try {
+                    const q = query(collection(db, 'admins'), where('email', '==', adminEmail));
+                    const snap = await getDocs(q);
+                    if (!snap.empty) {
+                        const data = snap.docs[0].data();
+                        setAdminName(data.name || data.role || 'Administrator');
+                    }
+                } catch (err) {
+                    console.error('Error fetching admin details:', err);
+                }
+            };
+            fetchAdminName();
+        }
+    }, [isAdminVerified, adminEmail]);
 
     const handleLogout = async () => {
+        if (isAdminVerified) {
+            // Admin logout — only clear admin session, don't sign out Firebase Auth
+            window.__adminVerified = false;
+            sessionStorage.removeItem("admin_verified");
+            sessionStorage.removeItem("admin_email");
+            toast.success("Logged out of Admin Panel!");
+            navigate("/admin");
+            return;
+        }
         try {
             await signOut();
             toast.success("Logged out successfully!");
@@ -19,18 +53,13 @@ const SidebarProfile = () => {
         }
     };
 
-    const isAdminVerified = sessionStorage.getItem("admin_verified") === "true";
-    const adminEmail = sessionStorage.getItem("admin_email") || "admin@bluecare.com";
-
     if (!user && !isAdminVerified) return null;
 
-    // Prioritize admin details if they are in the admin dashboard (verified)
-    // Otherwise fallback to regular user details
     let displayUser = user || {};
-    
+
     if (isAdminVerified) {
         displayUser = {
-            name: 'Administrator',
+            name: adminName,
             email: adminEmail
         };
     } else if (user) {

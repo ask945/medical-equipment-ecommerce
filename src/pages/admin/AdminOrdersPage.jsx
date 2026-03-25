@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom';
 import {
-    ShoppingBag, Filter, ChevronRight, Eye,
-    Truck, Calendar, AlertCircle, Clock,
-    Download, X, ListFilter, Pencil
+    ShoppingBag, ChevronRight, Eye, Truck, Plus,
+    Calendar, AlertCircle, Clock,
+    Download, X, ListFilter, Search
 } from 'lucide-react';
-import AdminOrderService, { ORDER_STATUSES, SHIPPING_CARRIERS } from '../../utils/adminOrderService';
+import AdminOrderService, { ORDER_STATUSES } from '../../utils/adminOrderService';
 import { formatCurrency } from '../../utils/formatUtils';
 import { Button, LoadingSpinner, Input, Modal } from '../../components/ui';
 import { toast } from 'react-toastify';
+import { exportToCSV } from '../../utils/csvUtils';
+import CreateOrderDrawer from '../../components/admin/CreateOrderDrawer';
 
 const AdminOrdersPage = () => {
     const [orders, setOrders] = useState([]);
@@ -18,50 +20,77 @@ const AdminOrdersPage = () => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState('view'); // 'view' or 'status' or 'tracking'
-    const [trackingInfo, setTrackingInfo] = useState({ carrier: 'IndiaPost', trackingNumber: '' });
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [sortBy, setSortBy] = useState('date');
+    const [sortDirection, setSortDirection] = useState('desc');
+    const [showCreateOrder, setShowCreateOrder] = useState(false);
 
     const fetchOrders = useCallback(async () => {
         setLoading(true);
         const result = await AdminOrderService.getAllOrders({
             status: statusFilter,
-            searchTerm: searchTerm
+            searchTerm: searchTerm,
+            startDate: startDate,
+            endDate: endDate,
+            sortBy: sortBy,
+            sortDirection: sortDirection
         });
         if (result.success) {
             setOrders(result.orders);
         } else {
-            setOrders([]); // Clear stale data on error
+            setOrders([]);
             toast.error("Failed to fetch orders. Please check your internet or try again later.");
         }
         setLoading(false);
-    }, [statusFilter, searchTerm]);
+    }, [statusFilter, searchTerm, startDate, endDate, sortBy, sortDirection]);
 
     useEffect(() => {
         fetchOrders();
     }, [fetchOrders]);
 
     const handleStatusUpdate = async (orderId, newStatus) => {
-        const result = await AdminOrderService.updateOrderStatus(orderId, newStatus);
-        if (result.success) {
-            toast.success(`Order ${newStatus} successfully`);
-            fetchOrders();
-            setIsModalOpen(false);
-        } else {
-            toast.error("Update failed");
+        try {
+            const result = await AdminOrderService.updateOrderStatus(orderId, newStatus);
+            if (result.success) {
+                toast.success(`Order ${newStatus} successfully`);
+                fetchOrders();
+                setIsModalOpen(false);
+            } else {
+                console.error('Status update failed:', result.error);
+                toast.error(`Update failed: ${result.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error('Status update exception:', err);
+            toast.error(`Update error: ${err.message}`);
         }
     };
 
-    const handleTrackingUpdate = async (e) => {
-        e.preventDefault();
-        const result = await AdminOrderService.updateOrderStatus(selectedOrder.id, 'Shipped', {
-            tracking: trackingInfo
-        });
-        if (result.success) {
-            toast.success("Tracking information updated");
-            fetchOrders();
-            setIsModalOpen(false);
-        } else {
-            toast.error("Failed to update tracking");
+
+    const handleExport = () => {
+        if (!orders || orders.length === 0) {
+            toast.warn("No orders to export");
+            return;
         }
+
+        const headers = [
+            { key: 'orderId', label: 'Order ID' },
+            { key: 'userName', label: 'Customer' },
+            { key: 'userEmail', label: 'Email' },
+            { key: 'orderDate', label: 'Date' },
+            { key: 'total', label: 'Total Amount' },
+            { key: 'status', label: 'Status' },
+            { key: 'paymentMethod', label: 'Payment Method' }
+        ];
+
+        const exportData = orders.map(order => ({
+            ...order,
+            orderDate: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : 'N/A',
+            userName: order.userName || (order.shippingAddress?.firstName ? `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}` : 'Guest')
+        }));
+
+        exportToCSV(exportData, `Orders_Export_${new Date().toISOString().split('T')[0]}.csv`, headers);
+        toast.success("Orders exported to CSV");
     };
 
     const OrderIDCell = ({ order }) => (
@@ -154,30 +183,49 @@ const AdminOrdersPage = () => {
                     <Button
                         variant="ghost"
                         className="bg-white border border-slate-200 text-slate-700 font-bold px-5 h-[48px] rounded-xl flex items-center gap-2 shadow-sm hover:bg-slate-50 text-sm"
-                        onClick={() => { }}
+                        onClick={handleExport}
                     >
                         <Download className="w-4 h-4" /> Export to CSV
                     </Button>
                     <Button
                         variant="primary"
                         className="bg-[#2563eb] hover:bg-blue-700 text-white font-bold px-6 h-[48px] rounded-xl flex items-center gap-2 shadow-xl shadow-blue-200 transition-all active:scale-95 text-sm"
-                        onClick={() => { }}
+                        onClick={() => setShowCreateOrder(true)}
                     >
-                        <X className="w-4 h-4 rotate-45" /> New Manual Order
+                        <Plus className="w-4 h-4" /> New Manual Order
                     </Button>
                 </div>
             </div>
 
-            {/* Filters Bar card */}
+            {/* Filters Bar */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 flex flex-wrap lg:flex-nowrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
+                <div className="px-6 py-4 space-y-3">
+                    {/* Row 1: Search Bar — full width */}
+                    <div className="flex items-center gap-2 bg-[#f1f5f9] rounded-xl px-4 py-2.5">
+                        <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search by name, email, order ID..."
+                            className="bg-transparent border-none outline-none text-[13px] font-medium text-slate-700 placeholder:text-slate-400 w-full"
+                        />
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="text-slate-400 hover:text-red-500">
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Row 2: Status tabs + Date + Sort */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Status Tabs */}
                         <div className="flex gap-1 bg-[#f1f5f9] p-1 rounded-xl w-fit flex-nowrap">
-                            {['All Orders', 'Processing', 'Shipped', 'Delivered'].map((tab) => (
+                            {['All Orders', 'Processing', 'Shipped', 'Delivered', 'Cancelled/Declined'].map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setStatusFilter(tab === 'All Orders' ? 'all' : tab)}
-                                    className={`px-4 py-1.5 rounded-lg text-[13px] font-bold transition-all ${(statusFilter === tab || (statusFilter === 'all' && tab === 'All Orders'))
+                                    className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all whitespace-nowrap ${(statusFilter === tab || (statusFilter === 'all' && tab === 'All Orders'))
                                         ? 'bg-white text-blue-600 shadow-sm'
                                         : 'text-slate-500 hover:text-slate-700'
                                         }`}
@@ -187,24 +235,51 @@ const AdminOrdersPage = () => {
                             ))}
                         </div>
 
-                        <div className="h-6 w-[1px] bg-slate-100 hidden sm:block" />
-
-                        <div className="flex items-center gap-2 flex-nowrap">
-                            <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-xl px-4 py-2 text-[12px] font-bold text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50 whitespace-nowrap">
+                        {/* Date + Sort */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* Date Range */}
+                            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[12px] font-bold text-slate-700 shadow-sm whitespace-nowrap">
                                 <Calendar className="w-4 h-4 text-slate-400" />
-                                <span>Oct 1 - Oct 31, 2023</span>
-                                <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="bg-transparent border-none outline-none text-[11px] w-24"
+                                />
+                                <span className="text-slate-300">to</span>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="bg-transparent border-none outline-none text-[11px] w-24"
+                                />
+                                {(startDate || endDate) && (
+                                    <button onClick={() => { setStartDate(''); setEndDate(''); }} className="text-slate-400 hover:text-red-500">
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                )}
                             </div>
-                            <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-xl px-4 py-2 text-[12px] font-bold text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50 whitespace-nowrap">
-                                <Filter className="w-4 h-4 text-slate-400" />
-                                <span>Advanced Filters</span>
+
+                            {/* Sort Dropdown */}
+                            <div className="flex items-center gap-1.5">
+                                <ListFilter className="w-4 h-4 text-slate-400" />
+                                <span className="text-[12px] font-bold text-slate-500">Sort By</span>
+                                <select
+                                    value={`${sortBy}-${sortDirection}`}
+                                    onChange={(e) => {
+                                        const [field, dir] = e.target.value.split('-');
+                                        setSortBy(field);
+                                        setSortDirection(dir);
+                                    }}
+                                    className="text-[12px] font-bold text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-blue-400 shadow-sm"
+                                >
+                                    <option value="date-desc">Newest First</option>
+                                    <option value="date-asc">Oldest First</option>
+                                    <option value="amount-desc">Amount: High to Low</option>
+                                    <option value="amount-asc">Amount: Low to High</option>
+                                </select>
                             </div>
                         </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-[12px] font-medium text-slate-400 whitespace-nowrap sm:ml-auto">
-                        Sorted by: <span className="text-slate-900 font-bold">Recent</span>
-                        <ListFilter className="w-4 h-4 text-slate-400 ml-1" />
                     </div>
                 </div>
             </div>
@@ -263,20 +338,12 @@ const AdminOrdersPage = () => {
                                             <StatusBadge status={order.status || 'Placed'} />
                                         </td>
                                         <td className="py-6 px-8 text-right">
-                                            <div className="flex gap-4 justify-end items-center">
-                                                <Link
-                                                    to={`/admin/orders/${order.id}`}
-                                                    className="text-slate-400 hover:text-blue-600 transition-colors"
-                                                >
-                                                    <Eye className="w-5 h-5" />
-                                                </Link>
-                                                <button
-                                                    onClick={() => { setSelectedOrder(order); setModalMode('tracking'); setIsModalOpen(true); }}
-                                                    className="text-slate-400 hover:text-slate-600 transition-colors"
-                                                >
-                                                    <Pencil className="w-4.5 h-4.5" />
-                                                </button>
-                                            </div>
+                                            <Link
+                                                to={`/admin/orders/${order.id}`}
+                                                className="text-slate-400 hover:text-blue-600 transition-colors"
+                                            >
+                                                <Eye className="w-5 h-5" />
+                                            </Link>
                                         </td>
                                     </tr>
                                 ))}
@@ -345,7 +412,7 @@ const AdminOrdersPage = () => {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={modalMode === 'view' ? "Order Details" : modalMode === 'tracking' ? "Shipment Details" : "Update Status"}
+                title={modalMode === 'view' ? "Order Details" : "Update Status"}
                 size={modalMode === 'view' ? 'lg' : 'md'}
             >
                 {selectedOrder && (
@@ -420,42 +487,16 @@ const AdminOrdersPage = () => {
                             </>
                         )}
 
-                        {modalMode === 'tracking' && (
-                            <form onSubmit={handleTrackingUpdate} className="space-y-4">
-                                <div className="bg-blue-50 p-4 rounded-xl mb-4 border border-blue-100">
-                                    <p className="text-sm text-blue-800 flex items-center gap-2">
-                                        <Truck className="w-4 h-4" />
-                                        Adding tracking info will update status to <strong>Shipped</strong> automatically.
-                                    </p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2">Carrier</label>
-                                    <select
-                                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary"
-                                        value={trackingInfo.carrier}
-                                        onChange={(e) => setTrackingInfo({ ...trackingInfo, carrier: e.target.value })}
-                                    >
-                                        {Object.values(SHIPPING_CARRIERS).map(c => (
-                                            <option key={c.code} value={c.name}>{c.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <Input
-                                    label="Tracking Number"
-                                    placeholder="Enter tracking ID/AWA number"
-                                    value={trackingInfo.trackingNumber}
-                                    onChange={(e) => setTrackingInfo({ ...trackingInfo, trackingNumber: e.target.value })}
-                                    required
-                                />
-                                <div className="flex justify-end gap-2 pt-4">
-                                    <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                                    <Button type="submit" variant="primary">Update Shipment</Button>
-                                </div>
-                            </form>
-                        )}
                     </div>
                 )}
             </Modal>
+
+            {/* Create Order Drawer */}
+            <CreateOrderDrawer
+                open={showCreateOrder}
+                onClose={() => setShowCreateOrder(false)}
+                onOrderCreated={() => fetchOrders()}
+            />
         </div>
     );
 };

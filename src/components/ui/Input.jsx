@@ -12,6 +12,9 @@ const Input = ({
     iconPosition = 'left',
     required = false,
     className = '',
+    type,
+    onInput,
+    onWheel,
     ...props
 }) => {
     const hasError = !!error;
@@ -49,6 +52,19 @@ const Input = ({
             text-text-primary
             bg-white
           `}
+                    type={type}
+                    onInput={(e) => {
+                        if (type === 'number' && e.target.value !== '' && e.target.value !== '-') {
+                            e.target.value = e.target.value.replace(/^0+(?=\d)/, '');
+                        }
+                        onInput?.(e);
+                    }}
+                    onWheel={(e) => {
+                        if (type === 'number') {
+                            e.currentTarget.blur();
+                        }
+                        onWheel?.(e);
+                    }}
                     {...props}
                 />
 

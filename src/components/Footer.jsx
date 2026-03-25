@@ -47,15 +47,11 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm uppercase tracking-wider mb-4">Help &amp; Info</h4>
             <ul className="space-y-2.5">
-              {['About Us', 'Shipping & Returns', 'FAQs', 'Insurance & FSA/HSA', 'Business Orders'].map(
-                (item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                      {item}
-                    </a>
-                  </li>
-                )
-              )}
+              <li><Link to="/" className="text-sm text-gray-400 hover:text-primary transition-colors">About Us</Link></li>
+              <li><Link to="/cart" className="text-sm text-gray-400 hover:text-primary transition-colors">Shipping & Returns</Link></li>
+              <li><Link to="/#faqs" className="text-sm text-gray-400 hover:text-primary transition-colors">FAQs</Link></li>
+              <li><Link to="/services" className="text-sm text-gray-400 hover:text-primary transition-colors">Insurance & FSA/HSA</Link></li>
+              <li><Link to="/contact?subject=Business/Bulk Orders" className="text-sm text-gray-400 hover:text-primary transition-colors">Business Orders</Link></li>
             </ul>
           </div>
 

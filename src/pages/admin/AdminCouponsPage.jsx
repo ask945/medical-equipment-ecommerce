@@ -6,12 +6,13 @@ import {
     Plus,
     Check,
     AlertCircle,
-    Download, Gift, IndianRupee, TrendingUp, TrendingDown,
-    Filter, Banknote
+    Download, Gift, TrendingUp, TrendingDown,
+    Banknote, Edit, Trash2
 } from "lucide-react";
 import { Modal, Button, Card, LoadingSpinner, Badge, Input } from "../../components/ui";
 import { toast } from "react-toastify";
 import { formatCurrency } from "../../utils/formatUtils";
+import { exportToCSV } from "../../utils/csvUtils";
 
 /**
  * AdminCouponsPage Component
@@ -30,6 +31,8 @@ const AdminCouponsPage = () => {
     const [isProductsDropdownOpen, setIsProductsDropdownOpen] = useState(false);
     const [productSearchTerm, setProductSearchTerm] = useState("");
     const [loadingProducts, setLoadingProducts] = useState(false);
+    const [orders, setOrders] = useState([]);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     // New coupon state with default values
     const [newCoupon, setNewCoupon] = useState({
@@ -52,6 +55,7 @@ const AdminCouponsPage = () => {
     useEffect(() => {
         fetchCoupons();
         fetchProducts();
+        fetchOrders();
     }, []);
 
     const fetchCoupons = async () => {
@@ -90,22 +94,59 @@ const AdminCouponsPage = () => {
         }
     };
 
-    // Calculate Stats
+    const fetchOrders = async () => {
+        try {
+            const snapshot = await getDocs(collection(db, "orders"));
+            setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (err) {
+            console.warn("Failed to fetch orders for coupon stats:", err);
+        }
+    };
+
+    // Calculate Stats from real order data
     const stats = useMemo(() => {
         const active = coupons.filter(c => c.isActive && !isCouponExpired(c.endDate)).length;
-        const redemptions = coupons.reduce((sum, c) => sum + (Number(c.usedCount) || 0), 0);
-        const volume = coupons.reduce((sum, c) => {
-            // Volume estimation: either total value given or potential value
-            // Since we don't have order totals here, we'll estimate based on discount value
-            return sum + (Number(c.discountValue) * (Number(c.usedCount) || 0));
-        }, 0);
+
+        // Real redemptions and volume from orders
+        const now = new Date();
+        const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+        const ordersWithCoupon = orders.filter(o => o.couponCode);
+        const totalRedemptions = ordersWithCoupon.length;
+        const totalVolume = ordersWithCoupon.reduce((sum, o) => sum + (Number(o.couponDiscount) || 0), 0);
+
+        // Also count from usedCount on coupons (for any that were incremented)
+        const usedCountTotal = coupons.reduce((sum, c) => sum + (Number(c.usedCount) || 0), 0);
+        const redemptions = Math.max(totalRedemptions, usedCountTotal);
+
+        // Month-over-month for redemptions
+        const getOrderDate = (o) => o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : (o.createdAt ? new Date(o.createdAt) : null);
+        const thisMonthRedemptions = ordersWithCoupon.filter(o => { const d = getOrderDate(o); return d && d >= firstDayThisMonth; }).length;
+        const lastMonthRedemptions = ordersWithCoupon.filter(o => { const d = getOrderDate(o); return d && d >= firstDayLastMonth && d < firstDayThisMonth; }).length;
+        const redemptionGrowth = lastMonthRedemptions > 0 ? Math.round(((thisMonthRedemptions - lastMonthRedemptions) / lastMonthRedemptions) * 100) : 0;
+
+        // Month-over-month for volume
+        const thisMonthVolume = ordersWithCoupon.filter(o => { const d = getOrderDate(o); return d && d >= firstDayThisMonth; }).reduce((s, o) => s + (Number(o.couponDiscount) || 0), 0);
+        const lastMonthVolume = ordersWithCoupon.filter(o => { const d = getOrderDate(o); return d && d >= firstDayLastMonth && d < firstDayThisMonth; }).reduce((s, o) => s + (Number(o.couponDiscount) || 0), 0);
+        const volumeGrowth = lastMonthVolume > 0 ? Math.round(((thisMonthVolume - lastMonthVolume) / lastMonthVolume) * 100) : 0;
+
+        // Active coupons growth (compare with last month)
+        const lastMonthActive = coupons.filter(c => {
+            const created = c.createdAt?.seconds ? new Date(c.createdAt.seconds * 1000) : (c.createdAt ? new Date(c.createdAt) : null);
+            return created && created < firstDayThisMonth && c.isActive && !isCouponExpired(c.endDate);
+        }).length;
+        const activeGrowth = lastMonthActive > 0 ? Math.round(((active - lastMonthActive) / lastMonthActive) * 100) : 0;
 
         return {
             active,
+            activeGrowth,
             redemptions: redemptions.toLocaleString(),
-            volume: formatCurrency(volume)
+            redemptionGrowth,
+            volume: formatCurrency(totalVolume),
+            volumeGrowth
         };
-    }, [coupons]);
+    }, [coupons, orders]);
 
     const handleAddCoupon = async () => {
         if (!newCoupon.code) {
@@ -228,15 +269,13 @@ const AdminCouponsPage = () => {
         }
     };
 
-    const handleDeleteCoupon = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this coupon?")) {
-            return;
-        }
-
+    const handleDeleteCoupon = async () => {
+        if (!deleteConfirm) return;
         try {
-            await deleteDoc(doc(db, "coupons", id));
+            await deleteDoc(doc(db, "coupons", deleteConfirm.id));
             toast.success("Coupon deleted successfully");
-            setCoupons(coupons.filter(coupon => coupon.id !== id));
+            setCoupons(coupons.filter(coupon => coupon.id !== deleteConfirm.id));
+            setDeleteConfirm(null);
         } catch (error) {
             console.error("Error deleting coupon:", error);
             toast.error("Failed to delete coupon");
@@ -307,16 +346,18 @@ const AdminCouponsPage = () => {
                     {icon}
                 </div>
             </div>
-            <div className="flex items-center gap-1">
-                {change.startsWith('+') ? (
-                    <TrendingUp className="w-4 h-4 text-green-500" />
-                ) : (
-                    <TrendingDown className="w-4 h-4 text-red-500" />
-                )}
-                <span className={`text-xs font-semibold ${change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
-                    {change} from last month
-                </span>
-            </div>
+            {change !== null && change !== undefined && (
+                <div className="flex items-center gap-1">
+                    {String(change).startsWith('+') ? (
+                        <TrendingUp className="w-4 h-4 text-green-500" />
+                    ) : String(change).startsWith('-') ? (
+                        <TrendingDown className="w-4 h-4 text-red-500" />
+                    ) : null}
+                    <span className={`text-xs font-semibold ${String(change).startsWith('-') ? 'text-red-500' : 'text-green-500'}`}>
+                        {change} from last month
+                    </span>
+                </div>
+            )}
         </Card>
     );
 
@@ -463,11 +504,28 @@ const AdminCouponsPage = () => {
                     <p className="text-gray-500 font-medium">Manage discounts for medical equipment sales and B2B contracts.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="border-gray-200 text-gray-700 font-bold bg-gray-50/50">
+                    <Button 
+                        variant="outline" 
+                        onClick={() => {
+                            if (!coupons || coupons.length === 0) {
+                                toast.warn("No coupons to export");
+                                return;
+                            }
+                            const headers = [
+                                { key: 'code', label: 'Coupon Code' },
+                                { key: 'discountType', label: 'Type' },
+                                { key: 'discountValue', label: 'Value' },
+                                { key: 'usedCount', label: 'Used' },
+                                { key: 'maxUses', label: 'Limit' },
+                                { key: 'endDate', label: 'Expiry' },
+                                { key: 'isActive', label: 'Active' }
+                            ];
+                            exportToCSV(coupons, `Coupons_Export_${new Date().toISOString().split('T')[0]}.csv`, headers);
+                            toast.success("Coupons exported to CSV");
+                        }}
+                        className="border-gray-200 text-gray-700 font-bold bg-gray-50/50"
+                    >
                         <Download className="w-4 h-4 mr-2" /> Export CSV
-                    </Button>
-                    <Button className="bg-blue-600 hover:bg-blue-700 font-bold shadow-lg shadow-blue-200">
-                        <Plus className="w-4 h-4 mr-2" /> Create Promotion
                     </Button>
                 </div>
             </header>
@@ -478,21 +536,21 @@ const AdminCouponsPage = () => {
                     "Active Coupons",
                     stats.active,
                     <Check className="w-6 h-6 text-green-600" />,
-                    "+2%",
+                    stats.activeGrowth !== 0 ? `${stats.activeGrowth > 0 ? '+' : ''}${stats.activeGrowth}%` : null,
                     "bg-green-100"
                 )}
                 {renderStatCard(
                     "Total Redemptions",
                     stats.redemptions,
                     <Gift className="w-6 h-6 text-blue-600" />,
-                    "-5%",
+                    stats.redemptionGrowth !== 0 ? `${stats.redemptionGrowth > 0 ? '+' : ''}${stats.redemptionGrowth}%` : null,
                     "bg-blue-100"
                 )}
                 {renderStatCard(
                     "Discount Volume",
                     stats.volume,
                     <Banknote className="w-6 h-6 text-amber-600" />,
-                    "+12%",
+                    stats.volumeGrowth !== 0 ? `${stats.volumeGrowth > 0 ? '+' : ''}${stats.volumeGrowth}%` : null,
                     "bg-amber-100"
                 )}
             </div>
@@ -504,26 +562,24 @@ const AdminCouponsPage = () => {
                     <Card className="p-0 overflow-hidden border-none shadow-xl">
                         <div className="flex items-center justify-between p-6 border-b border-gray-50">
                             <h2 className="text-xl font-bold text-gray-900">Active Promotional Codes</h2>
-                            <Button variant="outline" size="sm" className="bg-gray-50 text-gray-600 border-none font-bold">
-                                <Filter className="w-3.5 h-3.5 mr-2" /> Filter
-                            </Button>
                         </div>
 
-                        <div className="overflow-hidden">
-                            <table className="w-full">
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[700px]">
                                 <thead className="bg-gray-50/50">
                                     <tr>
                                         <th className="px-6 py-4 text-left text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Coupon Code</th>
                                         <th className="px-6 py-4 text-left text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Type</th>
                                         <th className="px-6 py-4 text-left text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Usage</th>
                                         <th className="px-6 py-4 text-left text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Expiry</th>
-                                        <th className="px-6 py-4 text-left text-[10px] font-extrabold text-gray-400 uppercase tracking-widest text-right">Status</th>
+                                        <th className="px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest text-right">Status</th>
+                                        <th className="px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {coupons.length === 0 ? (
                                         <tr>
-                                            <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                                            <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
                                                 <AlertCircle className="w-10 h-10 text-gray-200 mx-auto mb-3" />
                                                 No coupons found.
                                             </td>
@@ -582,6 +638,24 @@ const AdminCouponsPage = () => {
                                                         </div>
                                                     )}
                                                 </td>
+                                                <td className="px-6 py-5 text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <button
+                                                            onClick={() => startEditCoupon(coupon)}
+                                                            className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                            title="Edit coupon"
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeleteConfirm(coupon)}
+                                                            className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                            title="Delete coupon"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -601,6 +675,24 @@ const AdminCouponsPage = () => {
                     )}
                 </div>
             </div>
+            {/* Delete Confirm Modal */}
+            <Modal
+                isOpen={!!deleteConfirm}
+                onClose={() => setDeleteConfirm(null)}
+                title="Delete Coupon"
+                size="sm"
+            >
+                <div className="space-y-4 pt-2">
+                    <p className="text-sm text-gray-600">
+                        Are you sure you want to delete coupon <span className="font-mono font-bold text-blue-600">"{deleteConfirm?.code}"</span>?
+                    </p>
+                    <p className="text-xs text-red-500 font-medium">This action cannot be undone.</p>
+                    <div className="flex gap-3 justify-end pt-4 border-t">
+                        <Button variant="outline" onClick={() => setDeleteConfirm(null)} className="font-bold">Cancel</Button>
+                        <Button onClick={handleDeleteCoupon} className="bg-red-600 hover:bg-red-700 text-white font-bold">Delete</Button>
+                    </div>
+                </div>
+            </Modal>
         </motion.div>
     );
 };

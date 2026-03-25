@@ -9,7 +9,7 @@ import {
     Pencil, Volume2,
     Info, Calendar, Box, MousePointer2, Clock, Eye,
 } from 'lucide-react';
-import { Card, Button, LoadingSpinner } from '../../components/ui';
+import { Card, Button, LoadingSpinner, ConfirmDialog } from '../../components/ui';
 
 const AdminAnnouncementsPage = () => {
     const [announcements, setAnnouncements] = useState([]);
@@ -19,6 +19,7 @@ const AdminAnnouncementsPage = () => {
     const [isAddingNew, setIsAddingNew] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentEditId, setCurrentEditId] = useState(null);
+    const [confirmDelete, setConfirmDelete] = useState(null);
     const [newAnnouncement, setNewAnnouncement] = useState({
         text: '',
         priority: 'Medium',
@@ -115,13 +116,11 @@ const AdminAnnouncementsPage = () => {
     };
 
     const handleDeleteAnnouncement = async (id) => {
-        if (confirm('Delete this announcement?')) {
-            try {
-                await deleteDoc(doc(db, 'announcements', id));
-                toast.success('Deleted');
-            } catch (error) {
-                toast.error('Failed to delete');
-            }
+        try {
+            await deleteDoc(doc(db, 'announcements', id));
+            toast.success('Deleted');
+        } catch (error) {
+            toast.error('Failed to delete');
         }
     };
 
@@ -355,7 +354,7 @@ const AdminAnnouncementsPage = () => {
                                                     <Edit className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteAnnouncement(row.id)}
+                                                    onClick={() => setConfirmDelete(row.id)}
                                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
@@ -395,6 +394,16 @@ const AdminAnnouncementsPage = () => {
                     </Card>
                 )))}
             </div>
+
+            <ConfirmDialog
+                isOpen={!!confirmDelete}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={() => handleDeleteAnnouncement(confirmDelete)}
+                title="Delete Announcement"
+                message="Are you sure you want to delete this announcement?"
+                confirmText="Delete"
+                variant="danger"
+            />
         </div>
     );
 };

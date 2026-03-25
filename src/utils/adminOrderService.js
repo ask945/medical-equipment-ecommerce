@@ -11,7 +11,8 @@ import {
     startAfter,
     serverTimestamp,
     runTransaction,
-    writeBatch
+    writeBatch,
+    increment
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -137,11 +138,24 @@ class AdminOrderService {
             let filteredOrders = orders;
 
             // Re-apply status filter if fallback was used
-            // Re-apply status filter if fallback was used or for case-insensitive match
+            // Re-apply status filter — supports group filters
             if (filters.status && filters.status !== 'all') {
-                filteredOrders = filteredOrders.filter(o => 
-                    (o.status || '').toLowerCase() === filters.status.toLowerCase()
-                );
+                const statusLower = filters.status.toLowerCase();
+                if (statusLower === 'processing') {
+                    // Processing = Placed + Approved + Packed
+                    filteredOrders = filteredOrders.filter(o =>
+                        ['placed', 'approved', 'packed'].includes((o.status || '').toLowerCase())
+                    );
+                } else if (statusLower === 'cancelled/declined') {
+                    // Cancelled/Declined = Cancelled + Declined + Refunded
+                    filteredOrders = filteredOrders.filter(o =>
+                        ['cancelled', 'declined', 'refunded'].includes((o.status || '').toLowerCase())
+                    );
+                } else {
+                    filteredOrders = filteredOrders.filter(o =>
+                        (o.status || '').toLowerCase() === statusLower
+                    );
+                }
             }
 
             // Client-side date filtering
@@ -171,11 +185,17 @@ class AdminOrderService {
                 });
             }
 
-            // Re-apply sorting client-side to ensure consistency
+            // Re-apply sorting client-side
+            const sortField = filters.sortBy || 'date';
+            const sortDir = filters.sortDirection || 'desc';
             filteredOrders.sort((a, b) => {
+                if (sortField === 'amount') {
+                    return sortDir === 'desc' ? (b.total || 0) - (a.total || 0) : (a.total || 0) - (b.total || 0);
+                }
+                // Default: sort by date
                 const aDate = a.orderDate || new Date(0);
                 const bDate = b.orderDate || new Date(0);
-                return orderDirection === 'desc' ? bDate - aDate : aDate - bDate;
+                return sortDir === 'desc' ? bDate - aDate : aDate - bDate;
             });
 
             return {
@@ -286,6 +306,27 @@ class AdminOrderService {
             }
 
             await updateDoc(orderRef, updateData);
+
+            // Restore stock when order is cancelled/declined/refunded
+            // (only if previous status was not already one of these)
+            const cancelStatuses = ['cancelled', 'declined', 'refunded'];
+            const oldStatus = (currentOrder.status || '').toLowerCase();
+            const newStatusLower = newStatus.toLowerCase();
+
+            if (cancelStatuses.includes(newStatusLower) && !cancelStatuses.includes(oldStatus)) {
+                // Restore stock for each product item
+                if (currentOrder.items && Array.isArray(currentOrder.items)) {
+                    for (const item of currentOrder.items) {
+                        if (item.category === 'Services' || String(item.id).startsWith('service-')) continue;
+                        try {
+                            const productRef = doc(db, 'products', item.id);
+                            await updateDoc(productRef, { stock: increment(item.quantity || 1) });
+                        } catch (err) {
+                            console.warn(`Failed to restore stock for ${item.id}:`, err.message);
+                        }
+                    }
+                }
+            }
 
             return { success: true, newStatus };
         } catch (error) {

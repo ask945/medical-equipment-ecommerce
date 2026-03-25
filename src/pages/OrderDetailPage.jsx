@@ -136,10 +136,41 @@ export default function OrderDetailPage() {
               );
             })}
           </div>
-          <div className="mt-4 pt-4 border-t border-border flex justify-between">
-            <span className="text-sm font-semibold text-text-primary">Order Total</span>
-            <span className="text-lg font-bold text-primary">{formatCurrency(order.total || 0)}</span>
-          </div>
+          {(() => {
+            const computedSubtotal = order.subtotal || (order.items || []).reduce((s, i) => s + (i.price * (i.quantity || 1)), 0);
+            const discount = order.couponDiscount || 0;
+            const isServiceOnlyOrder = (order.items || []).every(i => i.category === 'Services' || String(i.id).startsWith('service-'));
+            const shipping = order.shippingCost || 0;
+            const tax = order.tax || ((computedSubtotal - discount) * 0.085);
+            return (
+              <div className="mt-4 pt-4 border-t border-border space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Subtotal</span>
+                  <span className="font-medium text-text-primary">{formatCurrency(computedSubtotal)}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-600">Coupon{order.couponCode ? ` (${order.couponCode})` : ''}</span>
+                    <span className="font-medium text-green-600">-{formatCurrency(discount)}</span>
+                  </div>
+                )}
+                {!isServiceOnlyOrder && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-secondary">Shipping</span>
+                    <span className="font-medium text-text-primary">{shipping > 0 ? formatCurrency(shipping) : 'Free'}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Tax (8.5%)</span>
+                  <span className="font-medium text-text-primary">{formatCurrency(tax)}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <span className="text-sm font-semibold text-text-primary">Total</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(order.total || 0)}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Sidebar Info */}

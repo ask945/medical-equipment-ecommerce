@@ -16,20 +16,34 @@ import {
 } from 'lucide-react';
 import Button from '../components/Button';
 import ProductCard from '../components/ProductCard';
-import { getProducts } from '../services/productService';
-import { getCategories } from '../services/categoryService';
 import { getReviews } from '../services/reviewService';
-import { getBlogs } from '../services/blogService';
+import { useData } from '../context/DataContext';
 import ReadingMaterials from '../components/ReadingMaterials';
 
 export default function HomePage() {
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const { products: dataProducts, categories: dataCategories, blogs, productsLoading, categoriesLoading, blogsLoading } = useData();
   const [reviews, setReviews] = useState([]);
-  const [blogs, setBlogs] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [reviewFilter, setReviewFilter] = useState('all');
   const [activeFaq, setActiveFaq] = useState(0);
+
+  // Compute categories with product counts
+  const normalize = (str) => (str || '').toLowerCase().replace(/\s+/g, '-');
+  const categories = dataCategories.map(cat => {
+    const count = dataProducts.filter(p => {
+      const prodCatId = (p.categoryId || p.category || p.type || '');
+      const prodCatName = normalize(p.category || p.type || '');
+      return (
+        cat.id === prodCatId ||
+        normalize(cat.label || '') === prodCatName ||
+        normalize(cat.label || '') === normalize(prodCatId) ||
+        normalize(cat.id || '') === prodCatName ||
+        normalize(cat.id || '') === normalize(prodCatId)
+      );
+    }).length;
+    return { ...cat, count };
+  });
+  const products = dataProducts;
+  const loading = productsLoading || categoriesLoading || blogsLoading;
 
   const faqs = [
     {
@@ -51,34 +65,9 @@ export default function HomePage() {
   ];
 
   useEffect(() => {
-    async function fetchData() {
+    async function fetchReviews() {
       try {
-        const [prods, cats, revs, fetchedBlogs] = await Promise.all([
-          getProducts(),
-          getCategories(),
-          getReviews(),
-          getBlogs(),
-        ]);
-        setProducts(prods);
-        // Calculate product counts per category using same logic as ProductListingPage
-        const normalize = (str) => (str || '').toLowerCase().replace(/\s+/g, '-');
-        const categoriesWithCount = cats.map(cat => {
-          const count = prods.filter(p => {
-            const prodCatId = (p.categoryId || p.category || p.type || '');
-            const prodCatName = normalize(p.category || p.type || '');
-            return (
-              cat.id === prodCatId ||
-              normalize(cat.label || '') === prodCatName ||
-              normalize(cat.label || '') === normalize(prodCatId) ||
-              normalize(cat.id || '') === prodCatName ||
-              normalize(cat.id || '') === normalize(prodCatId)
-            );
-          }).length;
-          return { ...cat, count };
-        });
-        setCategories(categoriesWithCount);
-
-        // Use fetched reviews or fallback to sample reviews for the demo
+        const revs = await getReviews();
         if (revs && revs.length > 0) {
           setReviews(revs);
         } else {
@@ -115,16 +104,25 @@ export default function HomePage() {
             }
           ]);
         }
-
-        setBlogs(fetchedBlogs?.slice(0, 3) || []);
       } catch (err) {
-        console.error('Error fetching home data:', err);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching reviews:', err);
       }
     }
-    fetchData();
+    fetchReviews();
   }, []);
+
+  // Handle hash scroll
+  useEffect(() => {
+    if (window.location.hash) {
+      const id = window.location.hash.replace('#', '');
+      const element = document.getElementById(id);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    }
+  }, [window.location.hash]);
 
   const filteredReviews = reviewFilter === 'all'
     ? reviews
@@ -348,7 +346,7 @@ export default function HomePage() {
       )}
 
       {/* FAQ Section */}
-      <section className="bg-gray-50 py-16 border-y border-border">
+      <section id="faqs" className="bg-gray-50 py-16 border-y border-border">
         <div className="container-main max-w-4xl">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-text-primary mb-3">Frequently Asked Questions</h2>
