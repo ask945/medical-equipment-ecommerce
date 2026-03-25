@@ -128,8 +128,7 @@ export function AuthProvider({ children }) {
 
   const resetPassword = async (email) => {
     try {
-      // Send reset email through our custom template function
-      await sendTemplatePasswordEmail(email);
+      await sendPasswordResetEmail(auth, email);
       return { success: true };
     } catch (err) {
       let errorMessage = "An error occurred while sending reset email.";

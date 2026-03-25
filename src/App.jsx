@@ -14,6 +14,7 @@ import CheckoutPage from './pages/CheckoutPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import SignInPage from './pages/SignInPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import WishlistPage from './pages/WishlistPage';
 import MyOrdersPage from './pages/MyOrdersPage';
 import OrderDetailPage from './pages/OrderDetailPage';
@@ -92,6 +93,7 @@ function AppLayout() {
           <Route path="/blog/:id" element={<BlogDetailPage />} />
           <Route path="/services" element={<ServicesPage />} />
           <Route path="/signin" element={<SignInPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/orders" element={<MyOrdersPage />} />
           <Route path="/my-orders" element={<MyOrdersPage />} />

@@ -13,7 +13,7 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -62,31 +62,6 @@ export default function SignInPage() {
     }
   };
 
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
-    if (!email) {
-      setError('Please enter your email address to reset password.');
-      setSuccessMessage('');
-      return;
-    }
-
-    setError('');
-    setSuccessMessage('');
-    setLoading(true);
-
-    try {
-      const result = await resetPassword(email);
-      if (result.success) {
-        setSuccessMessage('Password reset link sent! Check your email.');
-      } else {
-        setError(result.error || 'Failed to send reset email.');
-      }
-    } catch (err) {
-      setError('An error occurred.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center animate-fade-in py-12">
@@ -171,13 +146,12 @@ export default function SignInPage() {
                   <input type="checkbox" className="w-4 h-4 accent-primary rounded" />
                   <span className="text-sm text-text-secondary">Remember me</span>
                 </label>
-                <button 
-                  type="button" 
-                  onClick={handleForgotPassword}
+                <Link
+                  to="/forgot-password"
                   className="text-sm text-primary hover:underline font-medium"
                 >
                   Forgot password?
-                </button>
+                </Link>
               </div>
             )}
 
