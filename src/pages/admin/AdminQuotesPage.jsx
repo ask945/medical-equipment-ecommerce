@@ -66,7 +66,9 @@ const AdminQuotesPage = () => {
         try {
             await updateDoc(doc(db, "quotes", id), { status: newStatus });
             setQuotes(quotes.map(item => item.id === id ? { ...item, status: newStatus } : item));
+            setSelectedQuote(prev => prev ? { ...prev, status: newStatus } : prev);
             toast.success(`Quote marked as ${newStatus}`);
+            setTimeout(() => setIsModalOpen(false), 1500);
         } catch (error) {
             toast.error("Failed to update status");
         }

@@ -263,7 +263,7 @@ const AdminCategoriesPage = () => {
                         className="flex items-center gap-2 bg-[#1d61f2] hover:bg-blue-700 text-white font-bold h-12 px-6 rounded-xl shadow-lg shadow-blue-100 transition-all border border-blue-600"
                     >
                         <Plus className="w-5 h-5" />
-                        <span>Add a sub category to existing category</span>
+                        <span>Add category</span>
                     </button>
                 </div>
             </div>

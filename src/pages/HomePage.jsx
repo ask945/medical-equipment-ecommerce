@@ -286,10 +286,11 @@ export default function HomePage() {
                 </div>
                 <div className="p-6">
                   <p className="text-xs text-text-secondary mb-2">
-                    {blog.date ||
-                      (blog.createdAt?.toDate
-                        ? blog.createdAt.toDate().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-                        : blog.createdAt)}
+                    {blog.createdAt instanceof Date
+                      ? blog.createdAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : (blog.createdAt?.toDate
+                        ? blog.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : '')}
                   </p>
                   <h3 className="text-lg font-bold text-text-primary mb-3 group-hover:text-primary transition-colors line-clamp-2">
                     {blog.title}

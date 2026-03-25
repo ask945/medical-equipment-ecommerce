@@ -92,7 +92,7 @@ const BlogPage = () => {
                     </div>
                     <div className="p-6">
                       <div className="flex items-center gap-4 text-xs text-text-secondary mb-3">
-                        <span className="flex items-center gap-1"><Calendar size={14} /> {blog.date}</span>
+                        <span className="flex items-center gap-1"><Calendar size={14} /> {blog.createdAt instanceof Date ? blog.createdAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (blog.createdAt?.toDate ? blog.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '')}</span>
                         <span className="flex items-center gap-1"><Clock size={14} /> {blog.readTime}</span>
                       </div>
                       <h3 className="text-xl font-bold text-text-primary mb-3 group-hover:text-primary transition-colors line-clamp-2">
@@ -164,7 +164,7 @@ const BlogPage = () => {
                       <h4 className="text-sm font-bold text-text-primary line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                         {blog.title}
                       </h4>
-                      <p className="text-[10px] text-text-secondary mt-1">{blog.date}</p>
+                      <p className="text-[10px] text-text-secondary mt-1">{blog.createdAt instanceof Date ? blog.createdAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (blog.createdAt?.toDate ? blog.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '')}</p>
                     </div>
                   </Link>
                 ))}

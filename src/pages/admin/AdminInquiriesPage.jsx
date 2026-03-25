@@ -66,7 +66,9 @@ const AdminInquiriesPage = () => {
         try {
             await updateDoc(doc(db, "inquiries", id), { status: newStatus });
             setInquiries(inquiries.map(item => item.id === id ? { ...item, status: newStatus } : item));
+            setSelectedInquiry(prev => prev ? { ...prev, status: newStatus } : prev);
             toast.success(`Inquiry marked as ${newStatus}`);
+            setTimeout(() => setIsModalOpen(false), 1500);
         } catch (error) {
             toast.error("Failed to update status");
         }

@@ -101,15 +101,111 @@ const AdminOrderDetailPage = () => {
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-12">
             <style dangerouslySetInnerHTML={{ __html: `
+                .print-invoice { display: none; }
                 @media print {
-                    .no-print, button, nav, header, footer { display: none !important; }
-                    .print-only { display: block !important; }
-                    body { background: white !important; padding: 0 !important; }
-                    .max-w-6xl { max-width: 100% !important; margin: 0 !important; }
-                    .shadow-sm, .shadow-xl { shadow: none !important; border: 1px solid #eee !important; }
-                    .bg-slate-50\/50, .bg-slate-50 { background-color: #f8fafc !important; -webkit-print-color-adjust: exact; }
+                    body * { visibility: hidden !important; }
+                    .print-invoice, .print-invoice * { visibility: visible !important; }
+                    .print-invoice { display: block !important; position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: white; z-index: 99999; padding: 40px; font-family: 'Segoe UI', sans-serif; }
+                    @page { margin: 15mm; size: A4; }
                 }
             ` }} />
+
+            {/* Print-only Invoice */}
+            <div className="print-invoice">
+                {/* Invoice Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #1d61f2', paddingBottom: '20px', marginBottom: '30px' }}>
+                    <div>
+                        <h1 style={{ fontSize: '28px', fontWeight: '900', color: '#1d61f2', margin: 0 }}>INVOICE</h1>
+                        <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Bluecare Pharma</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Invoice #{order.orderId || order.id.substring(0, 8).toUpperCase()}</p>
+                        <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Date: {new Date(order.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Status: {order.status}</p>
+                    </div>
+                </div>
+
+                {/* Customer & Shipping - side by side */}
+                <div style={{ display: 'flex', gap: '40px', marginBottom: '30px' }}>
+                    <div style={{ flex: 1 }}>
+                        <h3 style={{ fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Bill To</h3>
+                        <p style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '4px' }}>
+                            {order.userName || (order.shippingAddress?.firstName ? `${order.shippingAddress.firstName} ${order.shippingAddress.lastName || ''}` : 'Guest Customer')}
+                        </p>
+                        <p style={{ fontSize: '12px', color: '#475569' }}>{order.userEmail}</p>
+                        <p style={{ fontSize: '12px', color: '#475569' }}>{order.userPhone || order.shippingAddress?.phone || ''}</p>
+                        <p style={{ fontSize: '12px', color: '#475569', marginTop: '2px' }}>Payment: {order.paymentMethod || 'Razorpay Online'}</p>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <h3 style={{ fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Ship To</h3>
+                        {typeof order.shippingAddress === 'string' ? (
+                            <p style={{ fontSize: '12px', color: '#475569' }}>{order.shippingAddress}</p>
+                        ) : (
+                            <>
+                                {order.shippingAddress?.firstName && <p style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '4px' }}>{order.shippingAddress.firstName} {order.shippingAddress.lastName || ''}</p>}
+                                <p style={{ fontSize: '12px', color: '#475569' }}>{order.shippingAddress?.streetAddress || order.shippingAddress?.street || order.shippingAddress?.addressLine1 || ''}</p>
+                                <p style={{ fontSize: '12px', color: '#475569' }}>{[order.shippingAddress?.city, order.shippingAddress?.state, order.shippingAddress?.zipCode || order.shippingAddress?.zip].filter(Boolean).join(', ')}</p>
+                                {order.shippingAddress?.country && <p style={{ fontSize: '12px', color: '#475569' }}>{order.shippingAddress.country}</p>}
+                                {order.shippingAddress?.phone && <p style={{ fontSize: '12px', color: '#475569' }}>Phone: {order.shippingAddress.phone}</p>}
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Items Table */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+                    <thead>
+                        <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                            <th style={{ textAlign: 'left', padding: '10px 8px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>#</th>
+                            <th style={{ textAlign: 'left', padding: '10px 8px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>Item</th>
+                            <th style={{ textAlign: 'center', padding: '10px 8px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>Qty</th>
+                            <th style={{ textAlign: 'right', padding: '10px 8px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>Price</th>
+                            <th style={{ textAlign: 'right', padding: '10px 8px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(order.items || []).map((item, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 8px', fontSize: '12px', color: '#64748b' }}>{idx + 1}</td>
+                                <td style={{ padding: '12px 8px' }}>
+                                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{item.name || item.title || 'Product Item'}</p>
+                                    <p style={{ fontSize: '11px', color: '#94a3b8', margin: '2px 0 0' }}>{item.brand || ''}</p>
+                                </td>
+                                <td style={{ padding: '12px 8px', fontSize: '13px', color: '#475569', textAlign: 'center' }}>{item.quantity || item.qty || 1}</td>
+                                <td style={{ padding: '12px 8px', fontSize: '13px', color: '#475569', textAlign: 'right' }}>{formatCurrency(item.price || 0)}</td>
+                                <td style={{ padding: '12px 8px', fontSize: '13px', fontWeight: '700', color: '#0f172a', textAlign: 'right' }}>{formatCurrency((item.price || 0) * (item.quantity || item.qty || 1))}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {/* Totals */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <div style={{ width: '280px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px' }}>
+                            <span style={{ color: '#64748b' }}>Subtotal</span>
+                            <span style={{ fontWeight: '600', color: '#0f172a' }}>{formatCurrency(order.total || 0)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px' }}>
+                            <span style={{ color: '#64748b' }}>Shipping</span>
+                            <span style={{ fontWeight: '600', color: '#16a34a' }}>Free</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px' }}>
+                            <span style={{ color: '#64748b' }}>Tax</span>
+                            <span style={{ fontWeight: '600', color: '#0f172a' }}>{formatCurrency(0)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '2px solid #1d61f2', marginTop: '8px' }}>
+                            <span style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a' }}>Total</span>
+                            <span style={{ fontSize: '16px', fontWeight: '900', color: '#1d61f2' }}>{formatCurrency(order.total || 0)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
+                    <p style={{ fontSize: '11px', color: '#94a3b8' }}>Thank you for your business! | Bluecare Pharma</p>
+                </div>
+            </div>
             {/* Navigation Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -136,9 +232,6 @@ const AdminOrderDetailPage = () => {
                 <div className="flex items-center gap-3 no-print">
                     <Button variant="outline" onClick={handlePrint} className="h-11 px-5 font-bold border-gray-200 text-slate-600 flex items-center gap-2">
                         <Printer className="w-4 h-4" /> Print Invoice
-                    </Button>
-                    <Button variant="outline" onClick={handlePrint} className="h-11 px-5 font-bold border-gray-200 text-slate-600 flex items-center gap-2">
-                        <Download className="w-4 h-4" /> Download PDF
                     </Button>
                 </div>
             </div>

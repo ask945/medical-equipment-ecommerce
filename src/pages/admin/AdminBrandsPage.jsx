@@ -474,7 +474,7 @@ const AdminBrandsPage = () => {
 
                             {/* Add Root Category - dropdown from Firestore categories */}
                             <div className="mt-6">
-                                <label className="text-xs font-bold text-slate-500 mb-2 block">Add Root Category from Existing</label>
+                                <label className="text-xs font-bold text-slate-500 mb-2 block">Add a subcategory to existing category</label>
                                 <div className="flex gap-2">
                                     <select
                                         value={categorySearchTerm}

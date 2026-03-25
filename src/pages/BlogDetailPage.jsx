@@ -69,7 +69,7 @@ const BlogDetailPage = () => {
               <div>
                 <p className="text-sm font-bold text-text-primary">{blog.author}</p>
                 <div className="flex items-center gap-3 text-xs text-text-secondary mt-1">
-                  <span className="flex items-center gap-1"><Calendar size={14} /> {blog.date}</span>
+                  <span className="flex items-center gap-1"><Calendar size={14} /> {blog.createdAt instanceof Date ? blog.createdAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (blog.createdAt?.toDate ? blog.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '')}</span>
                   <span className="flex items-center gap-1"><Clock size={14} /> {blog.readTime}</span>
                 </div>
               </div>
@@ -192,8 +192,8 @@ const BlogDetailPage = () => {
               {blog.comments && blog.comments.length > 0 ? (
                 blog.comments.map((comment, i) => (
                   <div key={i} className="flex gap-4 p-6 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex-shrink-0 border border-slate-100 overflow-hidden">
-                       <img src={comment.avatar || `https://i.pravatar.cc/100?u=${comment.userId}`} alt="" className="w-full h-full object-cover" />
+                    <div className="w-12 h-12 rounded-2xl bg-slate-200 flex-shrink-0 border border-slate-100 overflow-hidden flex items-center justify-center">
+                       <svg className="w-7 h-7 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
                     </div>
                     <div className="flex-1">
                        <div className="flex items-center justify-between mb-1">

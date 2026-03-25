@@ -467,27 +467,10 @@ export default function ProductDetailPage() {
             </div>
           )}
           {activeTab === 'documentation' && (
-            <div className="space-y-3">
-              {[
-                { name: 'User Manual v3.2', size: '4.2 MB' },
-                { name: 'Technical Specifications Sheet', size: '1.8 MB' },
-                { name: 'Certification Documents', size: '2.1 MB' },
-                { name: 'Maintenance Guide', size: '900 KB' },
-              ].map((doc, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileText size={18} className="text-primary" />
-                    <div>
-                      <p className="text-sm font-medium text-text-primary">{doc.name}</p>
-                      <p className="text-xs text-text-secondary">PDF • {doc.size}</p>
-                    </div>
-                  </div>
-                  <Download size={16} className="text-text-secondary" />
-                </div>
-              ))}
+            <div className="prose prose-sm max-w-none text-text-secondary leading-relaxed">
+              <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+              <p className="mt-3">Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+              <p className="mt-3">Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.</p>
             </div>
           )}
         </div>
