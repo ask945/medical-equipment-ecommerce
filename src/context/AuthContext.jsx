@@ -83,8 +83,7 @@ export function AuthProvider({ children }) {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Send custom verification email template via cloud function
-      await sendTemplateVerificationEmail(email);
+      await sendEmailVerification(cred.user);
 
       await createUserProfile(cred.user.uid, {
         name: name || email.split('@')[0],
