@@ -23,7 +23,7 @@ import { formatCurrency } from '../utils/formatUtils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
-import { createOrder, getOrders } from '../services/orderService';
+import { createOrder, getOrders, validateStock } from '../services/orderService';
 import { collection, query, where, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -273,6 +273,17 @@ export default function CheckoutPage() {
 
     setIsSubmitting(true);
     try {
+      // Validate stock availability before placing order
+      const stockCheck = await validateStock(cartItems);
+      if (!stockCheck.valid) {
+        const msgs = stockCheck.outOfStock.map(
+          item => `${item.name}: only ${item.available} left (you requested ${item.requested})`
+        );
+        toast.error(`Some items are out of stock:\n${msgs.join('\n')}`, { autoClose: 5000 });
+        setIsSubmitting(false);
+        return;
+      }
+
       const orderData = {
         userId: user ? user.uid : 'guest',
         userName: user?.name || `${formData.firstName} ${formData.lastName}`.trim() || 'Guest Customer',

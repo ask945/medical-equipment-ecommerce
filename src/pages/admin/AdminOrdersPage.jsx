@@ -5,6 +5,8 @@ import {
     Calendar, AlertCircle, Clock,
     Download, X, ListFilter, Search
 } from 'lucide-react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { adminDb as db } from '../../adminFirebase';
 import AdminOrderService, { ORDER_STATUSES } from '../../utils/adminOrderService';
 import { formatCurrency } from '../../utils/formatUtils';
 import { Button, LoadingSpinner, Input, Modal } from '../../components/ui';
@@ -26,28 +28,88 @@ const AdminOrdersPage = () => {
     const [sortDirection, setSortDirection] = useState('desc');
     const [showCreateOrder, setShowCreateOrder] = useState(false);
 
-    const fetchOrders = useCallback(async () => {
-        setLoading(true);
-        const result = await AdminOrderService.getAllOrders({
-            status: statusFilter,
-            searchTerm: searchTerm,
-            startDate: startDate,
-            endDate: endDate,
-            sortBy: sortBy,
-            sortDirection: sortDirection
-        });
-        if (result.success) {
-            setOrders(result.orders);
-        } else {
-            setOrders([]);
-            toast.error("Failed to fetch orders. Please check your internet or try again later.");
-        }
-        setLoading(false);
-    }, [statusFilter, searchTerm, startDate, endDate, sortBy, sortDirection]);
+    // Raw orders from real-time listener
+    const [rawOrders, setRawOrders] = useState([]);
 
+    // Real-time listener for orders collection
     useEffect(() => {
-        fetchOrders();
-    }, [fetchOrders]);
+        setLoading(true);
+        const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
+            const allOrders = snapshot.docs.map(d => {
+                const data = d.data();
+                let orderDate = null;
+                if (data.orderDate?.toDate) orderDate = data.orderDate.toDate();
+                else if (data.createdAt?.toDate) orderDate = data.createdAt.toDate();
+                else if (data.orderDate) orderDate = new Date(data.orderDate);
+                else if (data.createdAt) orderDate = new Date(data.createdAt);
+
+                return {
+                    id: d.id,
+                    ...data,
+                    orderDate: orderDate ? orderDate.toISOString() : new Date().toISOString(),
+                };
+            });
+            setRawOrders(allOrders);
+            setLoading(false);
+        }, (err) => {
+            console.error("Error listening to orders:", err);
+            toast.error("Failed to load orders");
+            setLoading(false);
+        });
+
+        return () => unsubOrders();
+    }, []);
+
+    // Client-side filtering/sorting (applied whenever rawOrders or filters change)
+    useEffect(() => {
+        let filtered = [...rawOrders];
+
+        // Status filter
+        if (statusFilter && statusFilter !== 'all') {
+            filtered = filtered.filter(o => o.status === statusFilter);
+        }
+
+        // Search filter
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            filtered = filtered.filter(o =>
+                (o.orderId || o.id || '').toLowerCase().includes(term) ||
+                (o.userName || '').toLowerCase().includes(term) ||
+                (o.userEmail || '').toLowerCase().includes(term)
+            );
+        }
+
+        // Date range filter
+        if (startDate) {
+            const start = new Date(startDate);
+            filtered = filtered.filter(o => new Date(o.orderDate) >= start);
+        }
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filtered = filtered.filter(o => new Date(o.orderDate) <= end);
+        }
+
+        // Sorting
+        filtered.sort((a, b) => {
+            let aVal, bVal;
+            if (sortBy === 'amount') {
+                aVal = a.total || 0;
+                bVal = b.total || 0;
+            } else {
+                aVal = new Date(a.orderDate).getTime();
+                bVal = new Date(b.orderDate).getTime();
+            }
+            return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
+        });
+
+        setOrders(filtered);
+    }, [rawOrders, statusFilter, searchTerm, startDate, endDate, sortBy, sortDirection]);
+
+    // For manual refresh and after status updates
+    const fetchOrders = useCallback(() => {
+        // No-op: real-time listener handles updates automatically
+    }, []);
 
     const handleStatusUpdate = async (orderId, newStatus) => {
         try {

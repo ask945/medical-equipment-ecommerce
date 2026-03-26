@@ -32,7 +32,13 @@ const AdminLoginPage = ({ onVerify }) => {
 
             if (!querySnapshot.empty) {
                 // Check if admin is disabled
-                const adminData = querySnapshot.docs[0].data();
+                const adminDoc = querySnapshot.docs[0];
+                const adminData = adminDoc.data();
+                if (adminData.isDeleted) {
+                    setError("This admin account no longer exists.");
+                    setLoading(false);
+                    return;
+                }
                 if (adminData.isDisabled) {
                     setError("Your admin account has been disabled. Contact a Super Admin.");
                     setLoading(false);
@@ -42,6 +48,7 @@ const AdminLoginPage = ({ onVerify }) => {
                 // Valid admin — store session and grant access
                 sessionStorage.setItem("admin_email", email);
                 sessionStorage.setItem("admin_role", adminData.role || "Admin");
+                sessionStorage.setItem("admin_id", adminDoc.id);
                 onVerify(true);
                 setLoading(false);
                 return;
@@ -63,6 +70,7 @@ const AdminLoginPage = ({ onVerify }) => {
 
                 sessionStorage.setItem("admin_email", email);
                 sessionStorage.setItem("admin_role", "Super Admin");
+                sessionStorage.setItem("admin_id", "super_admin_default");
                 onVerify(true);
                 setLoading(false);
                 return;

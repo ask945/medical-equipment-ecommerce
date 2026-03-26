@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { collection, query, getDocs, orderBy, limit } from "firebase/firestore";
+import { collection, query, getDocs, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { adminDb as db } from "../../adminFirebase";
 import { formatCurrency } from "../../utils/formatUtils";
 import {
@@ -704,21 +704,51 @@ const AdminPage = () => {
         window.__adminVerified === true
     );
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-[#f8fbff] flex items-center justify-center">
-                <LoadingSpinner size="xl" text="Verifying session..." />
-            </div>
-        );
-    }
-
     const [refreshKey, setRefreshKey] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Real-time check: force logout if current admin is disabled or deleted
+    useEffect(() => {
+        if (!isAdminVerified) return;
+
+        const adminEmail = sessionStorage.getItem("admin_email");
+        const adminId = sessionStorage.getItem("admin_id");
+        if (!adminEmail) return;
+
+        const unsubAdmins = onSnapshot(collection(db, "admins"), (snapshot) => {
+            const admins = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const myDoc = admins.find(a => a.id === adminId || a.email === adminEmail);
+
+            if (!myDoc || myDoc.isDeleted) {
+                toast.error("Your admin account has been deleted. Logging out...", { autoClose: 3000 });
+                window.__adminVerified = false;
+                sessionStorage.removeItem("admin_email");
+                sessionStorage.removeItem("admin_role");
+                sessionStorage.removeItem("admin_id");
+                sessionStorage.removeItem("admin_verified");
+                setIsAdminVerified(false);
+                navigate("/admin");
+                return;
+            }
+
+            if (myDoc.isDisabled) {
+                toast.error("Your account has been disabled by a Super Admin. Logging out...", { autoClose: 3000 });
+                window.__adminVerified = false;
+                sessionStorage.removeItem("admin_email");
+                sessionStorage.removeItem("admin_role");
+                sessionStorage.removeItem("admin_id");
+                sessionStorage.removeItem("admin_verified");
+                setIsAdminVerified(false);
+                navigate("/admin");
+            }
+        });
+
+        return () => unsubAdmins();
+    }, [isAdminVerified]);
 
     const handleRefreshData = () => {
         setRefreshing(true);
         setRefreshKey(prev => prev + 1);
-        // Force re-mount all child components by changing key
         setTimeout(() => {
             setRefreshing(false);
             toast.success("Admin data refreshed!");
@@ -742,11 +772,18 @@ const AdminPage = () => {
         }
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#f8fbff] flex items-center justify-center">
+                <LoadingSpinner size="xl" text="Verifying session..." />
+            </div>
+        );
+    }
+
     // If not verified, show the dedicated admin login
     if (!isAdminVerified) {
         return <AdminLoginPage onVerify={handleAdminVerify} />;
     }
-
 
     const menuItems = [
         { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
