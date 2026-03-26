@@ -2,12 +2,45 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Calendar, User, Clock, ArrowRight, BookOpen } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
+import { toast } from 'react-toastify';
 import Button from '../components/Button';
 
 const BlogPage = () => {
   const { blogs, blogsLoading: loading } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [subscribeEmail, setSubscribeEmail] = useState('');
+  const [subscribing, setSubscribing] = useState(false);
+
+  const handleSubscribe = async () => {
+    if (!subscribeEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subscribeEmail)) {
+      toast.warning('Please enter a valid email address');
+      return;
+    }
+    setSubscribing(true);
+    try {
+      const q = query(collection(db, 'subscribers'), where('email', '==', subscribeEmail));
+      const existing = await getDocs(q);
+      if (!existing.empty) {
+        toast.info('You are already subscribed!');
+        setSubscribing(false);
+        return;
+      }
+      await addDoc(collection(db, 'subscribers'), {
+        email: subscribeEmail,
+        subscribedAt: serverTimestamp(),
+        source: 'blog',
+      });
+      toast.success('Subscribed successfully!');
+      setSubscribeEmail('');
+    } catch (err) {
+      console.error('Subscribe error:', err);
+      toast.error('Failed to subscribe. Please try again.');
+    }
+    setSubscribing(false);
+  };
 
   const categories = ['All', ...new Set(blogs.map(blog => blog.category))];
 
@@ -139,13 +172,20 @@ const BlogPage = () => {
                 Get the latest health tips and product updates delivered to your inbox.
               </p>
               <div className="space-y-3 relative z-10">
-                <input 
-                  type="email" 
-                  placeholder="Your email address" 
+                <input
+                  type="email"
+                  placeholder="Your email address"
+                  value={subscribeEmail}
+                  onChange={(e) => setSubscribeEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSubscribe(); }}
                   className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:bg-white text-text-primary transition-all"
                 />
-                <button className="w-full bg-white text-primary font-bold py-2.5 rounded-lg hover:bg-gray-100 transition-colors shadow-lg">
-                  Subscribe Now
+                <button
+                  onClick={handleSubscribe}
+                  disabled={subscribing}
+                  className="w-full bg-white text-primary font-bold py-2.5 rounded-lg hover:bg-gray-100 transition-colors shadow-lg disabled:opacity-50"
+                >
+                  {subscribing ? 'Subscribing...' : 'Subscribe Now'}
                 </button>
               </div>
             </div>

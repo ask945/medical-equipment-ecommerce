@@ -11,7 +11,7 @@ import {
     ShoppingCart, Menu, RefreshCw,
     UserPlus,
     FileText, Ticket, Megaphone,
-    Banknote, ShieldCheck, Box, Mail, BookOpen, Stethoscope
+    Banknote, ShieldCheck, Box, Mail, BookOpen, Stethoscope, Inbox
 } from "lucide-react";
 import { Card, LoadingSpinner, Badge } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
@@ -794,6 +794,7 @@ const AdminPage = () => {
         { path: "/admin/users", icon: Users, label: "Users" },
         { path: "/admin/coupons", icon: Ticket, label: "Coupons" },
         { path: "/admin/blog", icon: BookOpen, label: "Blog Management" },
+        { path: "/admin/subscribers", icon: Inbox, label: "Subscribers" },
         { path: "/admin/inquiries", icon: Mail, label: "Contact Inquiries" },
         { path: "/admin/quotes", icon: FileText, label: "Requested Quotes" },
         // { path: "/admin/banners", icon: ImageIcon, label: "Banners" },

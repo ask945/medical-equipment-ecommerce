@@ -31,15 +31,9 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm uppercase tracking-wider mb-4">Shop</h4>
             <ul className="space-y-2.5">
-              {['Diabetes Care', 'Respiratory & CPAP', 'Heart & BP Monitors', 'Mobility & Recovery', 'Auto-Refill Supplies'].map(
-                (item) => (
-                  <li key={item}>
-                    <Link to="/products" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                      {item}
-                    </Link>
-                  </li>
-                )
-              )}
+              <li><Link to="/products" className="text-sm text-gray-400 hover:text-primary transition-colors">All Products</Link></li>
+              <li><Link to="/services" className="text-sm text-gray-400 hover:text-primary transition-colors">Services</Link></li>
+              <li><Link to="/blog" className="text-sm text-gray-400 hover:text-primary transition-colors">Blog</Link></li>
             </ul>
           </div>
 
@@ -47,11 +41,10 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm uppercase tracking-wider mb-4">Help &amp; Info</h4>
             <ul className="space-y-2.5">
-              <li><Link to="/" className="text-sm text-gray-400 hover:text-primary transition-colors">About Us</Link></li>
-              <li><Link to="/cart" className="text-sm text-gray-400 hover:text-primary transition-colors">Shipping & Returns</Link></li>
+              <li><Link to="/about" className="text-sm text-gray-400 hover:text-primary transition-colors">About Us</Link></li>
+              <li><Link to="/contact" className="text-sm text-gray-400 hover:text-primary transition-colors">Contact Us</Link></li>
               <li><Link to="/#faqs" className="text-sm text-gray-400 hover:text-primary transition-colors">FAQs</Link></li>
-              <li><Link to="/services" className="text-sm text-gray-400 hover:text-primary transition-colors">Insurance & FSA/HSA</Link></li>
-              <li><Link to="/contact?subject=Business/Bulk Orders" className="text-sm text-gray-400 hover:text-primary transition-colors">Business Orders</Link></li>
+              <li><Link to="/contact?subject=Request%20a%20Quote" className="text-sm text-gray-400 hover:text-primary transition-colors">Request a Quote</Link></li>
             </ul>
           </div>
 
@@ -61,7 +54,7 @@ export default function Footer() {
             <ul className="space-y-3">
               <li className="flex items-center gap-2 text-sm text-gray-400">
                 <Phone size={14} className="text-primary" />
-                +91 9818267167
+                +91 7718837352
               </li>
               <li className="flex items-center gap-2 text-sm text-gray-400">
                 <Mail size={14} className="text-primary" />

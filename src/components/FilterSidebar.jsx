@@ -22,6 +22,8 @@ export default function FilterSidebar({ onFilterChange, onClose, initialCategory
       setSelectedCategories(match ? [match.id] : [initialCategory]);
     } else if (initialCategory) {
       setSelectedCategories([initialCategory]);
+    } else {
+      setSelectedCategories([]);
     }
   }, [initialCategory, categories]);
 
@@ -139,16 +141,18 @@ export default function FilterSidebar({ onFilterChange, onClose, initialCategory
         <div className="flex gap-2 items-center">
           <input
             type="number"
-            value={priceRange[0]}
-            onChange={(e) => setPriceRange([Number(e.target.value), priceRange[1]])}
+            defaultValue={priceRange[0]}
+            onBlur={(e) => setPriceRange([Number(e.target.value) || 0, priceRange[1]])}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
             className="w-full px-2 py-1 border border-border rounded-md text-sm"
             min="0"
           />
           <span className="text-text-secondary">-</span>
           <input
             type="number"
-            value={priceRange[1]}
-            onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
+            defaultValue={priceRange[1]}
+            onBlur={(e) => setPriceRange([priceRange[0], Number(e.target.value) || 0])}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
             className="w-full px-2 py-1 border border-border rounded-md text-sm"
             min="0"
           />
@@ -197,7 +201,8 @@ export default function FilterSidebar({ onFilterChange, onClose, initialCategory
                 type="radio"
                 name="rating"
                 checked={minRating === rating}
-                onChange={() => setMinRating(rating)}
+                onChange={() => {}}
+                onClick={() => setMinRating(minRating === rating ? 0 : rating)}
                 className="w-4 h-4 text-primary focus:ring-primary transition-colors cursor-pointer border-gray-300"
               />
               <div className="flex items-center gap-1">

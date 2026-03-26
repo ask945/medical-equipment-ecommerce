@@ -38,6 +38,7 @@ import WhatsAppButton from './components/WhatsAppButton';
 import BlogPage from './pages/BlogPage';
 import BlogDetailPage from './pages/BlogDetailPage';
 import AdminBlogsPage from './pages/admin/AdminBlogsPage';
+import AdminSubscribersPage from './pages/admin/AdminSubscribersPage';
 import AdminBlogDetailEditor from './pages/admin/AdminBlogDetailEditor';
 import ServicesPage from './pages/ServicesPage';
 import { DataProvider } from './context/DataContext';
@@ -56,6 +57,7 @@ const dashboardRoutes = [
   '/admin/coupons',
   '/admin/inquiries',
   '/admin/quotes',
+  '/admin/subscribers',
   '/admin/blog',
   '/admin/blog/add',
   // '/admin/banners',
@@ -113,6 +115,7 @@ function AppLayout() {
             <Route path="coupons" element={<AdminCouponsPage />} />
             <Route path="inquiries" element={<AdminInquiriesPage />} />
             <Route path="quotes" element={<AdminQuotesPage />} />
+            <Route path="subscribers" element={<AdminSubscribersPage />} />
             <Route path="blog" element={<AdminBlogsPage />} />
             <Route path="blog/add" element={<AdminBlogDetailEditor />} />
             <Route path="blog/edit/:id" element={<AdminBlogDetailEditor />} />

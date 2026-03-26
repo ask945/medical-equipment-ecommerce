@@ -14,6 +14,7 @@ export function DataProvider({ children }) {
   const [blogs, setBlogs] = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [brands, setBrands] = useState([]);
   const [blogsLoading, setBlogsLoading] = useState(true);
 
   // Real-time products listener
@@ -48,6 +49,16 @@ export function DataProvider({ children }) {
     }, (err) => {
       console.error('Categories listener error:', err);
       setCategoriesLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  // Real-time brands listener
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'brands'), (snap) => {
+      setBrands(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error('Brands listener error:', err);
     });
     return unsub;
   }, []);
@@ -96,6 +107,7 @@ export function DataProvider({ children }) {
   const value = {
     products,
     categories,
+    brands,
     blogs,
     productsLoading,
     categoriesLoading,

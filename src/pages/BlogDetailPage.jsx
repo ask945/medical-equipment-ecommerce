@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Calendar, User, Clock, ArrowLeft, Share2, ChevronRight, BookOpen, Eye, MessageSquare } from 'lucide-react';
 import { getBlogById, incrementBlogViews, addBlogComment } from '../services/blogService';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useData } from '../context/DataContext';
 import Button from '../components/Button';
@@ -18,7 +18,37 @@ const BlogDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [subscribeEmail, setSubscribeEmail] = useState('');
+  const [subscribing, setSubscribing] = useState(false);
   const { user } = useAuth();
+
+  const handleSubscribe = async () => {
+    if (!subscribeEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subscribeEmail)) {
+      toast.warning('Please enter a valid email address');
+      return;
+    }
+    setSubscribing(true);
+    try {
+      const q = query(collection(db, 'subscribers'), where('email', '==', subscribeEmail));
+      const existing = await getDocs(q);
+      if (!existing.empty) {
+        toast.info('You are already subscribed!');
+        setSubscribing(false);
+        return;
+      }
+      await addDoc(collection(db, 'subscribers'), {
+        email: subscribeEmail,
+        subscribedAt: serverTimestamp(),
+        source: 'blog-detail',
+      });
+      toast.success('Subscribed successfully!');
+      setSubscribeEmail('');
+    } catch (err) {
+      console.error('Subscribe error:', err);
+      toast.error('Failed to subscribe. Please try again.');
+    }
+    setSubscribing(false);
+  };
 
   const recentBlogs = allBlogs.filter(b => b.id !== id).slice(0, 3);
 
@@ -283,12 +313,17 @@ const BlogDetailPage = () => {
             Subscribe to our newsletter and get the latest updates on medical equipment, wellness advice, and exclusive offers.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
-            <input 
-              type="email" 
-              placeholder="Enter your email" 
+            <input
+              type="email"
+              placeholder="Enter your email"
+              value={subscribeEmail}
+              onChange={(e) => setSubscribeEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSubscribe(); }}
               className="flex-1 px-6 py-3 rounded-full border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
             />
-            <Button variant="primary" size="lg">Subscribe</Button>
+            <Button variant="primary" size="lg" onClick={handleSubscribe} disabled={subscribing}>
+              {subscribing ? 'Subscribing...' : 'Subscribe'}
+            </Button>
           </div>
         </div>
       </div>

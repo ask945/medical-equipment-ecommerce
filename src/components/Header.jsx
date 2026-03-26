@@ -61,7 +61,7 @@ export function PublicHeader() {
         <div className="container-main flex justify-between items-center">
           <span>✨ Free shipping on orders over ₹500 • Easy 30-day returns</span>
           <div className="flex items-center gap-4">
-            <a href="tel:+91-9818267167" className="hover:underline">+91 9818267167</a>
+            <a href="tel:+91-9818267167" className="hover:underline">+91 7718837352</a>
           </div>
         </div>
       </div>

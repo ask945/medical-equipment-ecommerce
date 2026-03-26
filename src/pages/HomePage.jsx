@@ -6,15 +6,12 @@ import {
   Headphones,
   Truck,
   RefreshCw,
-  Star,
   Loader2,
   ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import Button from '../components/Button';
 import ProductCard from '../components/ProductCard';
 import { useData } from '../context/DataContext';
-import ReadingMaterials from '../components/ReadingMaterials';
 
 export default function HomePage() {
   const { products: dataProducts, categories: dataCategories, blogs, productsLoading, categoriesLoading, blogsLoading } = useData();
@@ -113,17 +110,6 @@ export default function HomePage() {
                   alt="Person checking health vitals at home"
                   className="w-full h-[480px] object-cover"
                 />
-              </div>
-              {/* Floating badge */}
-              <div className="absolute -bottom-4 -left-4 bg-white text-text-primary rounded-xl p-4 shadow-xl animate-slide-up border border-border">
-                <p className="text-2xl font-bold text-primary">500K+</p>
-                <p className="text-xs text-text-secondary">Happy Customers</p>
-              </div>
-              <div className="absolute -top-3 -right-3 bg-white text-text-primary rounded-xl p-3 shadow-lg animate-slide-up border border-border">
-                <div className="flex items-center gap-1">
-                  {[...Array(5)].map((_, i) => <Star key={i} size={12} className="text-warning fill-warning" />)}
-                </div>
-                <p className="text-xs text-text-secondary mt-0.5">4.8 avg rating</p>
               </div>
             </div>
           </div>
@@ -270,7 +256,7 @@ export default function HomePage() {
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {blogs.map((blog) => (
+            {blogs.slice(0, 3).map((blog) => (
               <Link
                 key={blog.id}
                 to={`/blog/${blog.id}`}
@@ -307,9 +293,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Reading Materials Section */}
-      <ReadingMaterials />
 
       {/* Subscribe & Save Banner */}
       <section className="container-main py-16">
