@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Calendar, User, Clock, ArrowLeft, Share2, ChevronRight, BookOpen, Eye, MessageSquare } from 'lucide-react';
 import { getBlogById, incrementBlogViews, addBlogComment } from '../services/blogService';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
 import { useData } from '../context/DataContext';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import '../css/BlogContent.css';
 
 const BlogDetailPage = () => {
   const { id } = useParams();
@@ -19,24 +22,38 @@ const BlogDetailPage = () => {
 
   const recentBlogs = allBlogs.filter(b => b.id !== id).slice(0, 3);
 
+  // Real-time blog listener
   useEffect(() => {
-    const fetchBlog = async () => {
-      window.scrollTo(0, 0);
-      const data = await getBlogById(id);
-      if (!data || data.isActive === false) {
+    window.scrollTo(0, 0);
+    setLoading(true);
+
+    const unsub = onSnapshot(doc(db, 'blogs', id), async (snap) => {
+      if (!snap.exists() || snap.data().isActive === false) {
         navigate('/blog');
         return;
       }
+      const data = {
+        id: snap.id,
+        ...snap.data(),
+        createdAt: snap.data().createdAt?.toDate() || new Date(),
+      };
       setBlog(data);
       setLoading(false);
+    }, (err) => {
+      console.error('Blog listener error:', err);
+      navigate('/blog');
+    });
 
-      // Unique view tracking
+    // Unique view tracking (fire once)
+    const trackView = async () => {
       const deviceId = localStorage.getItem('deviceId') || `dev_${Math.random().toString(36).substr(2, 9)}`;
       localStorage.setItem('deviceId', deviceId);
       const identifier = user ? user.uid : deviceId;
       await incrementBlogViews(id, identifier);
     };
-    fetchBlog();
+    trackView();
+
+    return unsub;
   }, [id, navigate, user]);
 
   if (loading) {
